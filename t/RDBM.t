@@ -32,7 +32,7 @@ unless ($DRIVER) {
     local($^W)=0;  # kill uninitialized variable warning
 # Test using the mysql, sybase, oracle and mSQL databases respectively
     my ($count) = 0;
-    my (%DRIVERS) = map { ($_,$count++) } qw(Informix Pg Ingres mSQL Sybase Oracle mysql);
+    my (%DRIVERS) = map { ($_,$count++) } qw(Informix Pg Ingres mSQL Sybase Oracle mysql); # ExampleP doesn't work
     ($DRIVER) = sort { $DRIVERS{$b}<=>$DRIVERS{$a} } DBI->available_drivers(1);
 }
 

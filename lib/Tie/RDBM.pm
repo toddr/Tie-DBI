@@ -669,7 +669,7 @@ modify it under the same terms as Perl itself.
 =head1 AVAILABILITY
 
 The latest version can be obtained from:
-   
+
    http://www.genome.wi.mit.edu/~lstein/Tie-DBM/
 
 =head1 SEE ALSO

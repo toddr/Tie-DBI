@@ -4,7 +4,7 @@ use strict;
 use vars qw($VERSION);
 use Carp;
 use DBI;
-$VERSION = '0.85';
+$VERSION = '0.91';
 
 # Default options for the module
 my %DefaultOptions = (
@@ -65,11 +65,14 @@ sub TIEHASH {
 	%DefaultOptions,
 	defined($opt) ? %$opt : ()
 	};
+    bless $self,$class;
+
     my ($dbh,$driver);
 
     if (UNIVERSAL::isa($dsn,'DBI::db')) {
 	$dbh = $dsn;
 	$driver = $dsn->{Driver}{Name};
+	$dbh->{Warn} = $self->{WARN};
     } else {
 	$dsn = "dbi:$dsn" unless $dsn=~ /^dbi/;
 	($driver) = $dsn =~ /\w+:(\w+)/;
@@ -85,7 +88,7 @@ sub TIEHASH {
 			       }
 			      );
 	$self->{needs_disconnect}++;
-	croak "TIEHASH: Can't open $dsn, ",$self->errstr unless $dbh;
+	croak "TIEHASH: Can't open $dsn, ",$class->errstr unless $dbh;
       }
 
     # set up more instance variables
@@ -96,7 +99,7 @@ sub TIEHASH {
     $self->{NoQuote}       = $NO_QUOTE{$driver};
     $self->{DoesIN}        = $DOES_IN{$driver};
 
-    return bless $self,$class;
+    return $self;
 }
 
 sub DESTROY {
@@ -253,7 +256,9 @@ sub STORE {
 	    $s->_update($key,\@fields,\@values)
 		:  $s->_insert($key,\@fields,\@values);
     } else {
-	$result = $s->_update($key,\@fields,\@values) || $s->_insert($key,\@fields,\@values);
+      my $errors;
+      local($s->{'dbh'}->{PrintError})= 0 unless $s->{'needs_disconnect'};  # not ours
+      $result = $s->_insert($key,\@fields,\@values) || $s->_update($key,\@fields,\@values);
     }
     croak "STORE: ",$s->errstr if $s->error;
 
@@ -324,7 +329,7 @@ sub _run_query {
     if ($self->{CanBind}) {
 	unless (!$self->{CanBindSelect} && $query=~/\bwhere\b/i) {
 	    my $sth = $self->_prepare($tag,$query);
-	    return undef unless $sth->execute(@bind_variables);
+	    return unless $sth->execute(@bind_variables);
 	    return $sth;
 	}
     }
@@ -333,7 +338,7 @@ sub _run_query {
     $query =~ s/\?/defined($_ = shift(@bind_variables)) ? $_ : 'null'/eg;
 
     my $sth = $self->{'dbh'}->prepare($query);
-    return undef unless $sth && $sth->execute;
+    return unless $sth && $sth->execute;
     return $sth;
 }
 
@@ -413,8 +418,8 @@ sub _update {
     $key = $s->_quote($s->{key},$key) unless $s->{CanBindSelect};
     local($") = ',';
     my $st = $s->_run_query("update@$fields",
-			  "update $s->{table} set @set where $s->{key}=?",@values,$key);
-    return $st ? $st->rows : 0;
+			    "update $s->{table} set @set where $s->{key}=?",@values,$key);
+    return $st ? $st->rows : undef;
 }
 
 sub _quote_many {
@@ -865,7 +870,7 @@ error() return $DBI::errstr and $DBI::error respectively.  You may
 may override these methods in subclasses if you wish.  For example,
 replace connect() with this code in order to use persistent database
 connections in Apache modules:
-  
+
  use Apache::DBI;  # somewhere in the declarations
  sub connect {
  my ($class,$dsn,$user,$password,$options) = @_;
@@ -895,7 +900,7 @@ in at the last commit().  This function has no effect on database that
 don't support transactions.
 
 =item select_where()
- 
+
    @keys=(tied %produce)->select_where('price > 1.00 and quantity < 10');
 
 This executes a limited form of select statement on the tied table and
@@ -914,7 +919,7 @@ to make the SQL query yourself with the DBI interface.
 =item dbh()
 
    $dbh = (tied %produce)->dbh();
-   
+
 This returns the tied hash's underlying database handle.  You can use
 this handle to create and execute your own SQL queries.
 
@@ -996,7 +1001,7 @@ modify it under the same terms as Perl itself.
 =head1 AVAILABILITY
 
 The latest version can be obtained from:
-   
+
    http://www.genome.wi.mit.edu/~lstein/Tie-DBI/
 
 =head1 SEE ALSO
