@@ -4,7 +4,7 @@ use strict;
 use vars qw($VERSION);
 use Carp;
 use DBI;
-$VERSION = '1.00';
+$VERSION = '1.01';
 
 BEGIN {
   eval {
@@ -634,9 +634,9 @@ Tie::DBI - Tie hashes to DBI relational databases
 =head1 SYNOPSIS
 
   use Tie::DBI;
-  tie %h,Tie::DBI,'mysql:test','test','id',{CLOBBER=>1};
+  tie %h,'Tie::DBI','mysql:test','test','id',{CLOBBER=>1};
 
-  tie %h,Tie::DBI,{db       => 'mysql:test',
+  tie %h,'Tie::DBI',{db       => 'mysql:test',
 		   table    => 'test',
                    key      => 'id',
                    user     => 'nobody',
@@ -684,7 +684,7 @@ DBI.
 
 =head2 Creating the tie
 
-   tie %var,Tie::DBI,[database,table,keycolumn] [,\%options]
+   tie %var,'Tie::DBI',[database,table,keycolumn] [,\%options]
 
 Tie a variable to a database by providing the variable name, the tie
 interface (always "Tie::DBI"), the data source name, the table to tie
@@ -839,7 +839,7 @@ like this one:
 
 We tie the variable %produce to the table in this way:
 
-    tie %produce,Tie::DBI,{db    => 'mysql:stock',
+    tie %produce,'Tie::DBI',{db    => 'mysql:stock',
                            table => 'produce',
                            key   => 'produce_id',
                            CLOBBER => 2 # allow most updates

@@ -1,5 +1,8 @@
 Revision history for Perl extension Tie::DBI.
 
+1.01 Mon Mar  7 18:51:27 EST 2005
+	More minor documentation fixes. (darn!)
+
 1.00 Mon Mar  7 18:47:59 EST 2005
 	Minor documentation fix.
 
