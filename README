@@ -1,0 +1,57 @@
+This is Tie::DBI and Tie::RDBM, two modules that allow you to tie
+associative arrays to relational databases using the DBI library.  The
+hash is tied to a table in a local or networked database.  Reading
+from the hash retrieves values from the datavbase.  Storing into the
+hash updates the database (if you have sufficient privileges).
+
+Tie::DBI implements a fully general binding between the hash and the
+table, allowing you to access fields in this manner:
+
+   $h{strawberries}->{quantity} = 228;
+
+Tie::RDBM implements a more limited binding which gives you access to
+only one column of the table.  However it is faster, can create and
+destroy tables on the fly, and provides an interface whereby you can
+store and retrieve complex Perl objects from the database table.
+
+In addition to this package, you will need the DBI database interface
+module, plus the DBD driver for the database of your choice.  To be
+able to store and retrieve non-scalar values via the Tie::RDBM
+interface you will also need Storable.pm These are all available at a
+CPAN near you:
+
+	http://www.perl.com/CPAN/
+
+To install:
+
+	1. perl Makefile.PL
+	2. make
+	3. make test [optional]
+	4. make install
+
+To read the documentation:
+
+	perldoc Tie::DBI
+        perldoc Tie::RDBM
+
+"make test" requires you to have a database named "test" up and
+running on the local machine.  The test script will search for an
+installed DBD driver to use.  You can override its choice by
+specifying DRIVER=<driver name> on the command line.  For example:
+	
+	make test DRIVER=mysql
+
+Databases differ in their capabilities, and some can't support binary
+data types.  On those databases, Tie::RDBM test #14 will fail.  The
+same test will fail if you do not have Storable.pm installed on your
+system.  This is nothing to worry about.
+
+The home page for this module is
+http://www.genome.wi.mit.edu/~lstein/Tie-DBI/.  See here for updates.
+
+For more information, see the perldoc documentation.
+
+Lincoln Stein
+January 19, 1998
+
+
