@@ -1,5 +1,9 @@
 Revision history for Perl extension Tie::DBI.
 
+0.86 August 7, 2000
+	Fixed bug in EXISTS that shows up when using DBD::InterBase.
+	Thanks to Michael Samanov for this.
+
 0.85 April 26, 1999
 	Fixed stupid mistake: $DBI::error should be $DBI::err.
 

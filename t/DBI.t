@@ -13,7 +13,7 @@ use constant USER   => $ENV{USER};
 use constant PASS   => $ENV{PASS};
 use constant DBNAME => $ENV{DB} || 'test';
 
-BEGIN { $| = 1; print "1..32\n"; }
+BEGIN { $| = 1; print "1..29\n"; }
 END {print "not ok 1\n" unless $loaded;}
 use lib './lib','../lib';
 use DBI;
@@ -26,7 +26,7 @@ unless ($DRIVER) {
     local($^W)=0;  # kill uninitialized variable warning
     # I like mysql best, followed by Oracle and Sybase
     my ($count) = 0;
-    my (%DRIVERS) = map { ($_,$count++) } qw(Informix Pg Ingres mSQL Sybase Oracle mysql); # ExampleP doesn't work;
+    my (%DRIVERS) = map { ($_,$count++) } qw(Informix Pg Ingres mSQL Sybase Oracle mysql ExampleP);
     ($DRIVER) = sort { $DRIVERS{$b}<=>$DRIVERS{$a} } DBI->available_drivers(1);
 }
 
@@ -94,7 +94,7 @@ sub test {
 sub initialize_database {
     local($^W) = 0;
     my $dsn = "dbi:$DRIVER:${\DBNAME}";
-    my $dbh = DBI->connect($dsn,USER,PASS,{Warn=>1,PrintError=>1,ChopBlanks=>1}) || return undef;
+    my $dbh = DBI->connect($dsn,USER,PASS,{Warn=>1,PrintError=>0,ChopBlanks=>1}) || return undef;
     $dbh->do("DROP TABLE testTie");
     return $dbh if $DRIVER eq 'ExampleP';
     my $table = $TABLES{$DRIVER} || DEFAULT_TABLE;
@@ -175,6 +175,3 @@ if ($DRIVER eq 'CSV') {
 } else {
   test 29,!defined($h{strawberries}->{quantity});
 }
-test 30,$h{strawberries}->{quantity}=42;
-test 31,$h{strawberries}->{quantity}=42;  # make sure update statement works when nothing changes
-test 32,$h{strawberries}->{quantity}==42;

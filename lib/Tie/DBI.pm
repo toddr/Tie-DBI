@@ -4,7 +4,7 @@ use strict;
 use vars qw($VERSION);
 use Carp;
 use DBI;
-$VERSION = '0.91';
+$VERSION = '0.86';
 
 # Default options for the module
 my %DefaultOptions = (
@@ -195,7 +195,7 @@ sub EXISTS {
     $st->fetch;
     my $rows = $st->rows;
     $st->finish;
-    $rows != 0;
+    $rows > 0;
 }
 
 sub CLEAR {
@@ -257,8 +257,9 @@ sub STORE {
 		:  $s->_insert($key,\@fields,\@values);
     } else {
       my $errors;
-      local($s->{'dbh'}->{PrintError})= 0 unless $s->{'needs_disconnect'};  # not ours
+      $errors = $s->{'dbh'}->{PrintError} if $s->{'needs_disconnect'};  # not ours
       $result = $s->_insert($key,\@fields,\@values) || $s->_update($key,\@fields,\@values);
+      $s->{'dbh'}->{PrintError} = $errors if $s->{'needs_disconnect'};  # not ours
     }
     croak "STORE: ",$s->errstr if $s->error;
 
@@ -785,6 +786,20 @@ Field names work in much the same way:
      print "There are $quantity apricots at $price each";
          => There are 2 apricots at 0.85 each";
 
+Note that this takes advantage of a bit of Perl syntactic sugar which
+automagically treats $h{'a','b','c'} as if the keys were packed
+together with the $; pack character.  Be careful not to fall into this
+trap:
+
+
+     $result = $h{join( ',', 'apricots', 'bananas' )};
+         => undefined
+
+What you really want is this:
+
+     $result = $h{join( $;, 'apricots', 'bananas' )};
+         => ARRAY(0x828a8ac)
+
 =head2 Updating information
 
 If CLOBBER is set to a non-zero value (and the underlying database
@@ -870,7 +885,7 @@ error() return $DBI::errstr and $DBI::error respectively.  You may
 may override these methods in subclasses if you wish.  For example,
 replace connect() with this code in order to use persistent database
 connections in Apache modules:
-
+  
  use Apache::DBI;  # somewhere in the declarations
  sub connect {
  my ($class,$dsn,$user,$password,$options) = @_;
@@ -900,7 +915,7 @@ in at the last commit().  This function has no effect on database that
 don't support transactions.
 
 =item select_where()
-
+ 
    @keys=(tied %produce)->select_where('price > 1.00 and quantity < 10');
 
 This executes a limited form of select statement on the tied table and
@@ -919,7 +934,7 @@ to make the SQL query yourself with the DBI interface.
 =item dbh()
 
    $dbh = (tied %produce)->dbh();
-
+   
 This returns the tied hash's underlying database handle.  You can use
 this handle to create and execute your own SQL queries.
 
@@ -1001,7 +1016,7 @@ modify it under the same terms as Perl itself.
 =head1 AVAILABILITY
 
 The latest version can be obtained from:
-
+   
    http://www.genome.wi.mit.edu/~lstein/Tie-DBI/
 
 =head1 SEE ALSO

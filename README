@@ -89,10 +89,9 @@ check out Gerald Richter's DBIx::Recordset, which puts a tied array
 interface on the results of arbitrary SQL expressions and is optimized 
 for use in embperl.
 
-References:
+The latest version of this module is available on CPAN.
 
-This module's home page:
-http://stein.cshl.org/~lstein/Tie-DBI/.  See here for updates.
+References:
 
 The DBI home page:
 http://www.hermetica.com/technologia/perl/DBI
@@ -101,6 +100,6 @@ Gerald Richter's DBIx::Recordset:
 http://perl.apache.org/embperl.html.
 
 Lincoln Stein
-April 26, 1999
+lstein@cshl.org
 
 
