@@ -47,7 +47,7 @@ if ($DRIVER eq 'Pg') { $dsn = "dbi:$DRIVER:dbname=${\DBNAME}"; }
                 else { $dsn = "dbi:$DRIVER:${\DBNAME}";        }
 
 print "ok 1\n";
-test 2,tie %h,Tie::RDBM,$dsn,{create=>1,drop=>1,table=>'PData','warn'=>0,user=>USER,password=>PASS};
+test 2,tie %h,'Tie::RDBM',$dsn,{create=>1,drop=>1,table=>'PData','warn'=>0,user=>USER,password=>PASS};
 %h=();
 test 3,!scalar(keys %h);
 test 4,$h{'fred'} = 'ethel';
@@ -76,6 +76,6 @@ test 16,$h{'george'}=42;
 test 17,join(" ",sort keys %h) eq "fred george ricky";
 untie %h;
 
-test 18,tie %i,Tie::RDBM,$dsn,{table=>'PData',user=>USER,password=>PASS};
+test 18,tie %i,'Tie::RDBM',$dsn,{table=>'PData',user=>USER,password=>PASS};
 test 19,$i{'george'}==42;
 test 20,join(" ",sort keys %i) eq "fred george ricky";

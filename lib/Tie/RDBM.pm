@@ -346,7 +346,7 @@ Tie::RDBM - Tie hashes to relational databases
 =head1 SYNOPSIS
 
   use Tie::RDBM;
-  tie %h,Tie::RDBM,'mysql:test',{table=>'Demo',create=>1,autocommit=>0};
+  tie %h,'Tie::RDBM','mysql:test',{table=>'Demo',create=>1,autocommit=>0};
   $h{'key1'} = 'Some data here';
   $h{'key2'} = 42;
   $h{'key3'} = { complex=>['data','structure','here'],works=>'true' };
@@ -593,7 +593,7 @@ from the hash, make the desired modifications, then store it back into
 the hash, as the example below shows:
 
 B<Process #1:>
-   tie %h,Tie::RDBM,'mysql:Employees:host.somewhere.com',
+   tie %h,'Tie::RDBM','mysql:Employees:host.somewhere.com',
                    {table=>'employee',user=>'fred',password=>'xyzzy'};
    $h{'Anne'} = { office=>'999 Infinity Drive, Rm 203',
                   age    =>  29,
@@ -603,7 +603,7 @@ B<Process #1:>
                   salary =>  35000 };
 
 B<Process #2:>
-   tie %i,Tie::RDBM,'mysql:Employees:host.somewhere.com',
+   tie %i,'Tie::RDBM','mysql:Employees:host.somewhere.com',
                    {table=>'employee',user=>'george',password=>'kumquat2'};
    foreach (keys %i) {
       $info = $i{$_};

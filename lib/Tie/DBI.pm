@@ -4,7 +4,7 @@ use strict;
 use vars qw($VERSION);
 use Carp;
 use DBI;
-$VERSION = '0.94';
+$VERSION = '1.00';
 
 BEGIN {
   eval {
@@ -359,8 +359,10 @@ sub _run_query {
     }
     local($^W) = 0;  # kill uninitialized variable warning
     # if we get here, then we can't bind, so we replace ? with escaped parameters
-    $query =~ s/\?/defined($_ = shift(@bind_variables)) ? $_ : 'null'/eg;
-
+    while ( (my $pos = index($query, '?')) >= 0 ) {
+      my $value = shift(@bind_variables);
+      substr($query, $pos, 1) = (defined($value) ? $value : 'null');
+    }
     my $sth = $self->{'dbh'}->prepare($query);
     return unless $sth && $sth->execute;
     return $sth;
