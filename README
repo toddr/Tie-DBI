@@ -35,23 +35,56 @@ To read the documentation:
         perldoc Tie::RDBM
 
 "make test" requires you to have a database named "test" up and
-running on the local machine.  The test script will search for an
-installed DBD driver to use.  You can override its choice by
+running on the local machine.  The database must allow table add and
+drop privileges for the current user.  The test script will search for
+an installed DBD driver to use.  You can override its choice by
 specifying DRIVER=<driver name> on the command line.  For example:
 	
-	make test DRIVER=mysql
+   make test DRIVER=mysql
+
+If you need to specify a different database, or need to provide a
+username and password to log in, you can provide these values as DB,
+USER and PASS, respectively, as in:
+
+   make test DRIVER=Oracle DB=DEMO USER=fred PASS=xyzzy
+
+And some drivers, such as Pg, want funny database names, as in:
+
+   make test DRIVER=Pg DB=dbname=test USER=fred PASS=xyzzy
 
 Databases differ in their capabilities, and some can't support binary
 data types.  On those databases, Tie::RDBM test #14 will fail.  The
 same test will fail if you do not have Storable.pm installed on your
 system.  This is nothing to worry about.
 
+The Postgres driver breaks when you try to set a field to null by
+passing it an under variable.  This causes test #29 to fail.
+
+In addition, there is vast heterogeneity among DBD drivers which
+renders this interface inoperative for certain databases.  It has been 
+tested and is known to work on the following databases:
+
+	1) mysql
+	2) Oracle
+	3) mSQL (fails Tie::RDBM test #14)
+	4) CSV
+	5) Postgres (fails Tie::RDBM test #14 and Tie::DBI test #29)
+	6) Informix (fails Tie::RDBM test #14)
+	7) Sybase (partial, fails all each() tests)
+	8) Solid
+
+Microsoft SQL server works partially with Tie::DBI (everything but
+"each") and not at all with Tie::RDBM.  This is because SQL server
+doesn't allow there to be multiple pending queries on the database.
+Let me know if you can get it to run with true Sybase servers, and any
+other drivers you try.
+
 The home page for this module is
-http://www.genome.wi.mit.edu/~lstein/Tie-DBI/.  See here for updates.
+http://stein.cshl.org/~lstein/Tie-DBI/.  See here for updates.
 
 For more information, see the perldoc documentation.
 
 Lincoln Stein
-January 19, 1998
+September 18, 1998
 
 

@@ -4,17 +4,49 @@ use strict;
 use vars qw($VERSION);
 use Carp;
 use DBI;
-$VERSION = '0.60';
+$VERSION = '0.80';
 
 # Default options for the module
 my %DefaultOptions = (
 		      'user'       =>  '',
 		      'password'   =>  '',
 		      'AUTOCOMMIT' =>  1,
-		      'WARN'       =>  1,
+		      'WARN'       =>  0,
 		      'DEBUG'      =>  0,
 		      'CLOBBER'    =>  0,
 		      );
+
+# DBD drivers that work correctly with bound variables
+my %CAN_BIND = (
+		'mysql' => 1,
+		'mSQL'  => 1,
+		'Oracle' => 1,
+		'CSV'  => 1,
+		'Pg'  => 1,
+		'Informix'  => 1,
+		'Solid'  => 1,
+	       );
+my %CAN_BINDSELECT = (
+		      'mysql' => 1,
+		      'mSQL'  => 1,
+		      'CSV'  => 1,
+		      'Pg'  => 1,
+		      'Informix'  => 1,
+		      'Solid'  => 1,
+		     );
+my %BROKEN_INSERT = (
+		     'mSQL' => 1
+		     );
+my %NO_QUOTE =(
+	       'Sybase' => {map {$_=>1} (6..17,20,24)},
+	     );
+my %DOES_IN = (
+	       'mysql' => 1,
+	       'Oracle' => 1,
+	       'Sybase' => 1,
+	       );
+
+
 # TIEHASH interface
 # tie %h,Tie::DBI,[dsn|dbh,table,key],\%options
 sub TIEHASH {
@@ -27,7 +59,8 @@ sub TIEHASH {
 	($dsn,$table,$key,$opt) = @_;
     }
 
-    croak "Usage tie(%h,Tie::DBI,[dsn|dbh,table,key],\\%options)" unless $dsn;
+    croak "Usage tie(%h,Tie::DBI,dsn,table,key,\\%options)\n   or tie(%h,Tie::DBI,{db=>\$db,table=>\$table,key=>\$key})" 
+      unless $dsn && $table && $key;
     my $self = {
 	%DefaultOptions,
 	defined($opt) ? %$opt : ()
@@ -36,27 +69,39 @@ sub TIEHASH {
 
     if (UNIVERSAL::isa($dsn,'DBI::db')) {
 	$dbh = $dsn;
-	$driver = ''; # XXX No way to find out?
+	$driver = $dsn->{Driver}{Name};
     } else {
 	$dsn = "dbi:$dsn" unless $dsn=~ /^dbi/;
 	($driver) = $dsn =~ /\w+:(\w+)/;
 
 	# Try to establish connection with data source.
-	$dbh = DBI->connect($dsn,$self->{user},$self->{password},
-			       { AutoCommit=>$self->{AUTOCOMMIT},
-				 Warn=>$self->{WARN} }
-			       );
-	croak "TIEHASH: Can't open $dsn, $DBI::errstr" unless $dbh;
-    }
+	delete $ENV{NLS_LANG};	# this gives us 8 bit characters ??
+
+	$dbh = $class->connect($dsn,$self->{user},$self->{password},
+                               { AutoCommit=>$self->{AUTOCOMMIT},
+				 ChopBlanks=>1,
+				 PrintError=>0,
+				 Warn=>$self->{WARN},
+			       }
+			      );
+	$self->{needs_disconnect}++;
+	croak "TIEHASH: Can't open $dsn, ",$self->errstr unless $dbh;
+      }
 
     # set up more instance variables
-    @{$self}{'dbh','table','key','broken'} = ($dbh, $table, $key,$driver eq 'mSQL');
+    @{$self}{'dbh','table','key'} = ($dbh, $table, $key );
+    $self->{BrokenInsert}  = $BROKEN_INSERT{$driver};
+    $self->{CanBind}       = $CAN_BIND{$driver};
+    $self->{CanBindSelect} = $self->{CanBind} && $CAN_BINDSELECT{$driver};
+    $self->{NoQuote}       = $NO_QUOTE{$driver};
+    $self->{DoesIN}        = $DOES_IN{$driver};
 
     return bless $self,$class;
 }
 
 sub DESTROY {
-    $_[0]->{'dbh'}->disconnect if defined $_[0]->{'dbh'};
+  $_[0]->{'dbh'}->disconnect if defined $_[0]->{'dbh'} 
+  && $_[0]->{needs_disconnect};
 }
 
 sub FETCH {
@@ -64,20 +109,25 @@ sub FETCH {
 
     # user could refer to $h{a,b,c}: handle this case
     my (@keys) = split ($;,$key);
-    my $st;
+    my ($tag,$query);
     if (@keys > 1) {  # need an IN clause
 	my ($count) = scalar(@keys);
-	$st = 
-	    $s->_prepare("fetch$count","SELECT $s->{key} FROM $s->{table} WHERE $s->{key} IN (" 
-			 .
-			 join(",",('?')x$count)
-			 . ')'
-			 );
+	$tag = "fetch$count";
+	if (!$s->{CanBindSelect}) {
+	  foreach (@keys) { $_ =  $s->_quote($s->{key},$_); }
+	}
+	if ($s->{DoesIN}) {
+	  $query = "SELECT $s->{key} FROM $s->{table} WHERE $s->{key} IN (" .
+	    join(",",('?')x$count) . ')';
+	} else {
+	  $query = "SELECT $s->{key} FROM $s->{table} WHERE " . join (' OR ',("$s->{key}=?")x$count);
+	}
     } else {
-	$st = $s->_prepare('fetch1',"SELECT $s->{key} FROM $s->{table} WHERE $s->{key} = ?");
-     }
-    $st->execute(@keys) ||
-	croak "FETCH: $DBI::errstr";
+	$tag = "fetch1";
+	@keys = $s->_quote($s->{key},$key) unless $s->{CanBindSelect};
+	$query = "SELECT $s->{key} FROM $s->{table} WHERE $s->{key} = ?";
+    }
+    my $st = $s->_run_query($tag,$query,@keys) || croak "FETCH: ",$s->errstr;
 
     # slightly more efficient for one key
     if (@keys == 1) {
@@ -97,17 +147,23 @@ sub FETCH {
 	$got{$r->[0]} = $h;
     }
     $st->finish;
+    @keys = split($;,$key);
     return (@keys > 1) ? [@got{@keys}] : $got{$keys[0]};
 }
 
 sub FIRSTKEY {
     my $s = shift;
     my $st = $s->_prepare('fetchkeys',"SELECT $s->{key} FROM $s->{table}") 
-	|| croak "FIRSTKEY: $DBI::errstr";
+	|| croak "FIRSTKEY: ",$s->errstr;
     $st->execute() ||
-	croak "FIRSTKEY: $DBI::errstr";
+	croak "FIRSTKEY: ",$s->errstr;
     my $ref = $st->fetch;
-    return defined($ref) ? $ref->[0] : undef;
+    unless (defined($ref)) {
+      $st->finish;
+      delete $s->{'fetchkeys'}; #freakin' sybase bug
+      return undef;
+    }
+    return $ref->[0];
 }
 
 sub NEXTKEY {
@@ -119,6 +175,7 @@ sub NEXTKEY {
     my $r = $st->fetch;
     if (!$r) {
 	$st->finish;
+	delete $s->{'fetchkeys'}; #freakin' sybase bug
 	return wantarray ? () : undef;
     }
     # Should we do a tie here?
@@ -129,11 +186,13 @@ sub NEXTKEY {
 # Unlike fetch, this never goes to the cache
 sub EXISTS {
     my ($s,$key) = @_;
-    my $st = $s->_prepare('fetch1',"SELECT $s->{key} FROM $s->{table} WHERE $s->{key} = ?");
-    $st->execute($key);
+    $key = $s->_quote($s->{key},$key) unless $s->{CanBindSelect};
+    my $st = $s->_run_query('fetch1',"SELECT $s->{key} FROM $s->{table} WHERE $s->{key} = ?",$key);
+    croak $DBI::errstr unless $st;
+    $st->fetch;
     my $rows = $st->rows;
     $st->finish;
-    $rows;
+    $rows != 0;
 }
 
 sub CLEAR {
@@ -143,7 +202,7 @@ sub CLEAR {
 
     my $st = $s->_prepare('clear',"delete from $s->{table}");
     $st->execute() ||
-	croak "CLEAR: delete statement failed, $DBI::errstr";
+	croak "CLEAR: delete statement failed, ",$s->errstr;
     $st->finish;
 }
 
@@ -151,9 +210,9 @@ sub DELETE {
     my ($s,$key) = @_;
     croak "DELETE: read-only database"
 	unless $s->{CLOBBER} > 1;
-    my $st = $s->_prepare('delete',"delete from $s->{table} where $s->{key} = ?");
-    $st->execute($key) ||
-	croak "DELETE: delete statement failed, $DBI::errstr";
+    $key = $s->_quote($s->{key},$key) unless $s->{CanBindSelect};    
+    my $st = $s->_run_query('delete',"delete from $s->{table} where $s->{key} = ?",$key) ||
+	croak "DELETE: delete statement failed, ",$s->errstr;
     $st->finish;
     
 }
@@ -183,19 +242,20 @@ sub STORE {
 	}
 	push(@fields,$_);
     }
+    return undef unless @fields;
     my (@values) = map { $value->{$_} } @fields;
 
     # Attempt an insert.  If that fails (usually because the key already exists), 
     # perform an update. For this to work correctly, the key field MUST be marked
     my $result;
-    if ($s->{broken}) {  # check for broken drivers
+    if ($s->{BrokenInsert}) {  # check for broken drivers
 	$result = $s->EXISTS($key) ? 
 	    $s->_update($key,\@fields,\@values)
 		:  $s->_insert($key,\@fields,\@values);
     } else {
-	$result = $s->_insert($key,\@fields,\@values) || $s->_update($key,\@fields,\@values);
+	$result = $s->_update($key,\@fields,\@values) || $s->_insert($key,\@fields,\@values);
     }
-    croak "STORE: $DBI::errstr" if $DBI::err;
+    croak "STORE: ",$s->errstr if $s->error;
 
     # Neat special case: If we are passed an empty anonymous hash, then
     # we must tie it to Tie::DBI::Record so that the correct field updating
@@ -221,14 +281,33 @@ sub rollback {
     $_[0]->{'dbh'}->rollback();
 }
 
+# The connect() method is responsible for the low-level connect to
+# the database.  It should return a database handle or return undef.
+# You may want to override this to connect via a subclass of DBI, such
+# as Apache::DBI.
+sub connect {
+  my ($class,$dsn,$user,$password,$options) = @_;
+  return DBI->connect($dsn,$user,$password,$options);
+}
+ 
+# Return a low-level error.  You might want to override this
+# if you use a subclass of DBI
+sub errstr {
+  return $DBI::errstr;
+}
+
+sub error {
+  return $DBI::error;
+}
+
 sub select_where {
     my($s,$query) = @_;
     # get rid of everything but the where clause
     $query=~s/^\s*(select .+)?where\s+//i; 
     my $st = $s->{'dbh'}->prepare("select $s->{key} from $s->{table} where $query") 
-	|| croak "select_where: $DBI::errstr";
+	|| croak "select_where: ",$s->errstr;
     $st->execute()
-	|| croak "select_where: $DBI::errstr";
+	|| croak "select_where: ",$s->errstr;
     my ($key,@results);
     $st->bind_columns(undef,\$key);
     while ($st->fetch) {
@@ -239,40 +318,70 @@ sub select_where {
 }
 
 # ---------------- everything below this line is private --------------------------
+sub _run_query {
+    my $self = shift;
+    my ($tag,$query,@bind_variables) = @_;
+    if ($self->{CanBind}) {
+	unless (!$self->{CanBindSelect} && $query=~/\bwhere\b/i) {
+	    my $sth = $self->_prepare($tag,$query);
+	    return undef unless $sth->execute(@bind_variables);
+	    return $sth;
+	}
+    }
+    local($^W) = 0;  # kill uninitialized variable warning
+    # if we get here, then we can't bind, so we replace ? with escaped parameters
+    $query =~ s/\?/defined($_ = shift(@bind_variables)) ? $_ : 'null'/eg;
+
+    my $sth = $self->{'dbh'}->prepare($query);
+    return undef unless $sth && $sth->execute;
+    return $sth;
+}
+
 sub _fields {
     my $self = shift;
     unless ($self->{'fields'}) {
 
 	my ($dbh,$table) = @{$self}{'dbh','table'};
-	my $sth = $dbh->prepare("LISTFIELDS $table") ||
-	    croak "_fields() failed during prepare(LISTFIELDS) statement: $DBI::errstr";
-	if (!($sth->execute)) {
-	    # doesn't support LISTFIELDS, so try SELECT *
-	    $sth->finish;
-	    $sth = $self->prepare("SELECT * FROM $table WHERE 0 <> 1") ||
-		croak "_fields() failed during prepare(SELECT) statement: $DBI::errstr";
-	    $sth->execute || 
-		croak "_fields() failed during execute statement: $DBI::errstr";
+
+	local($^W) = 0;  # kill uninitialized variable warning
+	my $sth = $dbh->prepare("LISTFIELDS $table");
+	unless (defined($sth) && $sth->execute) {  # doesn't support LISTFIELDS, so try SELECT *
+	  $sth = $dbh->prepare("SELECT * FROM $table WHERE 0=1") ||
+		croak "_fields() failed during prepare(SELECT) statement: ",$self->errstr;
+	  $sth->execute() ||
+	    croak "_fields() failed during execute(SELECT) statement: ",$self->errstr;
 	}
-	
 	# if we get here, we can fetch the names of the fields
-	my %fields = map { $_=>1 } @{$sth->{NAME}};
+	my %fields = map { lc($_)=>1 } @{$sth->{NAME}};
 	$sth->finish;
 	$self->{'fields'} = \%fields;
     }
     return $self->{'fields'};
 }
 
+sub _types {
+  my $self = shift;
+  return $self->{'types'} if $self->{'types'};
+  my $sth = $self->{'dbh'}->prepare("SELECT * FROM $self->{table} WHERE 0=1") ||
+    croak "_types() failed during prepare(SELECT) statement: $DBI::errstr";
+  $sth->execute() ||
+    croak "_types() failed during execute(SELECT) statement: $DBI::errstr";
+  my $types = $sth->{TYPE};
+  my $names = $sth->{NAME};
+  my %types = map { shift(@$names) => $_ } @$types;
+  return $self->{'types'} = \%types;
+}
+
 sub _fetch_field ($$) {
     my ($s,$key,$fields) = @_;
+    $key = $s->_quote($s->{key},$key) unless $s->{CanBindSelect};
     my $valid = $s->_fields();
     my @valid_fields = grep($valid->{$_},@$fields);
     return undef unless @valid_fields;
 
     my $f = join(',',@valid_fields);
-    my $st = $s->_prepare("fetch$f","SELECT $f FROM $s->{table} WHERE $s->{key} = ?");
-    $st->execute($key) ||
-	croak "_fetch_field: $DBI::errstr";
+    my $st = $s->_run_query("fetch$f","SELECT $f FROM $s->{table} WHERE $s->{key}=?",$key) ||
+	croak "_fetch_field: ",$s->errstr;
 
     my (@r,@results);
     while (@r = $st->fetchrow_array) {
@@ -288,21 +397,47 @@ sub _insert {
     my ($s,$key,$fields,$values) = @_;
     push (@$fields,$s->{key});
     push (@$values,$key);
+    my @values = $s->_quote_many($fields,$values);
     my (@Qs) = ('?') x @$values;
-
     local($") = ',';
-    my $st = $s->_prepare("insert@$fields","insert into $s->{table} (@$fields) values (@Qs)");
-    return $st->execute(@$values);
+    my $st = $s->_run_query("insert@$fields","insert into $s->{table} (@$fields) values (@Qs)",@values);
+    pop (@$fields);
+    pop (@$values);    
+    return $st ? $st->rows : 0;
 }
 
 sub _update {
     my ($s,$key,$fields,$values) = @_;
     my (@set) = map {"$_=?"} @$fields;
-
+    my @values = $s->_quote_many($fields,$values);
+    $key = $s->_quote($s->{key},$key) unless $s->{CanBindSelect};
     local($") = ',';
-    my $st = $s->_prepare("update@$fields",
-			  "update $s->{table} set @set where $s->{key} = ?");
-    return $st->execute(@$values,$key); 
+    my $st = $s->_run_query("update@$fields",
+			  "update $s->{table} set @set where $s->{key}=?",@values,$key);
+    return $st ? $st->rows : 0;
+}
+
+sub _quote_many {
+  my ($s,$fields,$values) = @_;
+  return @$values if $s->{CanBind};
+  return map { $s->{'db'}->quote($_) } @$values 
+    unless my $noquote = $s->{NoQuote};
+  my @values = @$values;
+  my $types = $s->_types;
+  my $count = 0;
+  foreach (@values) {
+    next if $noquote->{$types->{$fields->[$count++]}};
+    $_ = $s->{'dbh'}->quote($_);
+  }
+  return @values;
+}
+
+sub _quote {
+  my ($s,$field,$value) = @_;
+  return $s->{'dbh'}->quote($value) 
+    unless my $noquote = $s->{NoQuote};
+  my $types = $s->_types;
+  return $noquote->{$types->{$field}} ? $value : $s->{'dbh'}->quote($value);
 }
 
 sub _prepare ($$$) {
@@ -311,7 +446,6 @@ sub _prepare ($$$) {
 	return undef unless $q;
 	warn $q,"\n" if $self->{DEBUG};
 	my $sth = $self->{'dbh'}->prepare($q);
-	croak qq/Problems preparing statement "$q": $DBI::errstr/ unless $sth;
 	$self->{$tag} = $sth;
     } else {
 	$self->{$tag}->finish if $q;  # in case we forget
@@ -395,6 +529,13 @@ Tie::DBI - Tie hashes to DBI relational databases
   use Tie::DBI;
   tie %h,Tie::DBI,'mysql:test','test','id',{CLOBBER=>1};
 
+  tie %h,Tie::DBI,{db       => 'mysql:test',
+		   table    => 'test',
+                   key      => 'id',
+                   user     => 'nobody',
+                   password => 'ghost',
+                   CLOBBER  => 1};
+
   # fetching keys and values
   @keys = keys %h;
   @fields = keys %{$h{$keys[0]}};
@@ -453,13 +594,21 @@ handle that has previously been opened.  See the documentation for DBI
 and your DBD driver for details.  Because the initial "dbi" is always
 present in the data source, Tie::DBI will add it for you if necessary.
 
+Note that some drivers (Oracle in particular) have an irritating habit
+of appending blanks to the end of fixed-length fields.  This will
+screw up Tie::DBI's routines for getting key names.  To avoid this you
+should create the database handle with a B<ChopBlanks> option of TRUE.
+You should also use a B<PrintError> option of true to avoid complaints
+during STORE and LISTFIELD calls.  
+
+
 =item table
 
 The table in the database to bind to.  The table must previously have
 been created with a SQL CREATE statement.  This module will not create
 tables for you or modify the schema of the database.
 
-=item keycolumn
+=item key
 
 The column to use as the hash key.  This column must prevoiusly have
 been defined when the table was created.  In order for this module to
@@ -606,6 +755,7 @@ Array slices are fully supported as well:
     ($apricots,$kiwis) = @produce{apricots,kiwis};
     print "Kiwis are $kiwis->{description};
         => Kiwis are Juicy New York kiwi fruits
+
     ($price,$description) = @{$produce{eggs}}{price,description};
         => (2.4,'Farm-fresh Atlantic eggs')
 
@@ -619,6 +769,7 @@ faster.  For example:
 
      $result = $produce{apricots,bananas};
          => ARRAY(0x828a8ac)
+
      ($apricots,$bananas) = @$result;
      print "The price of apricots is $apricots->{price}";
          => The price of apricots is 0.85
@@ -705,6 +856,22 @@ call (which returns the object), or call tied() on the tie variable to
 recover the object.
 
 =over 4
+
+=item connect(), error(), errstr()
+
+These are low-level class methods.  Connect() is responsible for
+establishing the connection with the DBI database.  Errstr() and
+error() return $DBI::errstr and $DBI::error respectively.  You may
+may override these methods in subclasses if you wish.  For example,
+replace connect() with this code in order to use persistent database
+connections in Apache modules:
+  
+ use Apache::DBI;  # somewhere in the declarations
+ sub connect {
+ my ($class,$dsn,$user,$password,$options) = @_;
+    return Apache::DBI->connect($dsn,$user,
+                                $password,$options);
+ }
 
 =item commit()
 
@@ -802,11 +969,22 @@ require a large number of updates to be processed rapidly.
 
 =head1 BUGS
 
-Yes.
+=head1 BUGS
+
+The each() call produces a fatal error when used with the Sybase
+driver to access Microsoft SQL server. This is because this server
+only allows one query to be active at a given time.  A workaround is
+to use keys() to fetch all the keys yourself.  It is not known whether
+real Sybase databases suffer from the same problem.
+
+The delete() operator will not work correctly for setting field values
+to null with DBD::CSV or with DBD::Pg.  CSV files do not have a good
+conception of database nulls.  Instead you will set the field to an
+empty string.  DBD::Pg just seems to be broken in this regard.
 
 =head1 AUTHOR
 
-Lincoln Stein, lstein@w3.org
+Lincoln Stein, lstein@cshl.org
 
 =head1 COPYRIGHT
 

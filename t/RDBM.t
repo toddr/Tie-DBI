@@ -9,10 +9,13 @@
 # change this if you need to
 
 my $DRIVER = $ENV{DRIVER};
+use constant USER => $ENV{USER};
+use constant PASS => $ENV{PASS};
+use constant DBNAME => $ENV{DB} || 'test';
 
 BEGIN { $| = 1; print "1..20\n"; }
 END {print "not ok 1\n" unless $loaded;}
-use lib './lib';
+use lib './lib','../lib';
 use DBI;
 use Tie::RDBM;
 $loaded = 1;
@@ -34,14 +37,14 @@ unless ($DRIVER) {
 }
 
 if ($DRIVER) {
-    warn "Using DBD driver $DRIVER.\n";
+    print STDERR "Using DBD driver $DRIVER...";
 } else {
     die "Found no DBD driver to use.\n";
 }
 
-my($dsn) = "dbi:$DRIVER:test";
+my($dsn) = "dbi:$DRIVER:${\DBNAME}";
 print "ok 1\n";
-test 2,tie %h,Tie::RDBM,$dsn,{create=>1,drop=>1,table=>'PData'};
+test 2,tie %h,Tie::RDBM,$dsn,{create=>1,drop=>1,table=>'PData','warn'=>0,user=>USER,password=>PASS};
 %h=();
 test 3,!scalar(keys %h);
 test 4,$h{'fred'} = 'ethel';
@@ -54,12 +57,15 @@ test 10,exists($h{'fred'});
 test 11,delete $h{'fred'};
 test 12,!exists($h{'fred'});
 test 13,$h{'fred'}={'name'=>'my name is fred','age'=>34};
-test 14,$h{'fred'}->{'age'} == 34;
+{
+  local($^W) = 0;  # avoid uninitialized variable warning
+  test 14,$h{'fred'}->{'age'} == 34;
+}
 test 15,join(" ",sort keys %h) eq "fred ricky";
 test 16,$h{'george'}=42;
 test 17,join(" ",sort keys %h) eq "fred george ricky";
 untie %h;
 
-test 18,tie %i,Tie::RDBM,$dsn,{table=>'PData'};
+test 18,tie %i,Tie::RDBM,$dsn,{table=>'PData',user=>USER,password=>PASS};
 test 19,$i{'george'}==42;
 test 20,join(" ",sort keys %i) eq "fred george ricky";

@@ -9,6 +9,9 @@
 # change this if you need to
 
 my $DRIVER = $ENV{DRIVER};
+use constant USER   => $ENV{USER};
+use constant PASS   => $ENV{PASS};
+use constant DBNAME => $ENV{DB} || 'test';
 
 BEGIN { $| = 1; print "1..29\n"; }
 END {print "not ok 1\n" unless $loaded;}
@@ -28,10 +31,50 @@ unless ($DRIVER) {
 }
 
 if ($DRIVER) {
-    warn "Using DBD driver $DRIVER.\n";
+    print STDERR "Using DBD driver $DRIVER...";
 } else {
     die "Found no DBD driver to use.\n";
 }
+
+my %TABLES = (
+	      'CSV' => <<END,
+CREATE TABLE testTie (
+produce_id       char(15),
+price            real,
+quantity         int,
+description      char(30)
+)
+END
+	      'mSQL' => <<END,
+CREATE TABLE testTie (
+produce_id       char(15),
+price            real,
+quantity         int,
+description      char(30)
+)
+;
+CREATE UNIQUE INDEX idx1 ON testTie (produce_id)
+END
+               'Pg'=><<END,
+CREATE TABLE testTie (
+produce_id       varchar(15) primary key,
+price            real,
+quantity         int,
+description      varchar(30)
+)
+END
+);
+
+use constant DEFAULT_TABLE=><<END;
+CREATE TABLE testTie (
+produce_id       char(15) primary key,
+price            real,
+quantity         int,
+description      char(30)
+)
+END
+    ;
+
 
 my @fields =   qw(produce_id     price quantity description);
 my @test_data = (
@@ -49,18 +92,14 @@ sub test {
 }
 
 sub initialize_database {
-    my $dsn = "dbi:$DRIVER:test";
-    my $dbh = DBI->connect($dsn) || return undef;
+    local($^W) = 0;
+    my $dsn = "dbi:$DRIVER:${\DBNAME}";
+    my $dbh = DBI->connect($dsn,USER,PASS,{Warn=>1,PrintError=>0,ChopBlanks=>1}) || return undef;
     $dbh->do("DROP TABLE testTie");
-    $dbh->do(<<END) || warn DBI::errstr;
-CREATE TABLE testTie (
-produce_id       char(15) primary key,
-price            real,
-quantity         int,
-description      char(30)
-)
-END
-    ;
+    my $table = $TABLES{$DRIVER} || DEFAULT_TABLE;
+    foreach (split(';',$table)) {
+      $dbh->do($_) || warn $DBI::errstr;
+    }
     $dbh;
 }
 
@@ -75,9 +114,15 @@ sub insert_data {
     return $count == @test_data;
 }
 
+sub chopBlanks {
+  my $a = shift;
+  $a=~s/\s+$//;
+  $a;
+}
+
 test 1,$loaded;
 test 2,(my $dbh = &initialize_database),
-    "Couldn't create test table.  Make sure you have table add privileges for a database named test";
+    "Couldn't create test table.  $DBI::errstr";
 die unless $dbh;
 test 3,tie %h,Tie::DBI,{db=>$dbh,table=>'testTie',key=>'produce_id',CLOBBER=>3,WARN=>0};
 
@@ -86,7 +131,7 @@ test 4,!scalar(keys %h);
 test 5,insert_data(\%h);
 test 6,exists($h{strawberries});
 test 7,defined($h{strawberries});
-test 8,join(" ",sort keys %h) eq "apricots bananas eggs kiwis strawberries";
+test 8,join(" ",map {chopBlanks($_)} sort keys %h) eq "apricots bananas eggs kiwis strawberries";
 test 9,$h{eggs}->{quantity} == 12;
 test 10,$h{eggs}->{quantity} *= 2;
 test 11,$h{eggs}->{quantity} == 24;
@@ -106,7 +151,7 @@ test 15,$h{'cherries'}{quantity} == 200;
 test 16,$h{'cherries'} = { price => 2.75 };
 test 17,$h{'cherries'}{quantity} == 200;
 test 18,$h{'cherries'}{price} == 2.75;
-test 19,join(" ",sort keys %h) eq "apricots bananas cherries eggs kiwis strawberries";
+test 19,join(" ",map {chopBlanks($_)} sort keys %h) eq "apricots bananas cherries eggs kiwis strawberries";
 
 test 20,delete $h{'cherries'};
 test 21,!$h{'cherries'};
@@ -121,4 +166,9 @@ test 26,@fields = tied(%h)->select_where('quantity > 10');
 test 27,join(" ",sort @fields) eq 'bananas eggs';
 
 test 28,delete $h{strawberries}->{quantity};
-test 29,!defined($h{strawberries}->{quantity});
+if ($DRIVER eq 'CSV') {
+	print STDERR "Skipping test 29 for CSV driver...";
+	print "ok 29\n";
+} else {
+  test 29,!defined($h{strawberries}->{quantity});
+}

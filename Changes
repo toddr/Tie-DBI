@@ -1,5 +1,12 @@
 Revision history for Perl extension Tie::DBI.
 
+0.70 September 25, 1998
+	- Now correctly supports Oracle.
+
+0.60 January 28, 1998
+	- Tested on mSQL and mySQL
+	- Does not work correctly with Oracle or Sybase
+
 0.01  Sun Jan 11 16:50:57 1998
 	- original version; created by h2xs 1.18
 
