@@ -4,7 +4,14 @@ use strict;
 use vars qw($VERSION);
 use Carp;
 use DBI;
-$VERSION = '0.86';
+$VERSION = '0.93';
+
+BEGIN {
+  eval {
+    require Encode::compat if $] < 5.007001;
+    require Encode;
+  }
+}
 
 # Default options for the module
 my %DefaultOptions = (
@@ -14,10 +21,12 @@ my %DefaultOptions = (
 		      'WARN'       =>  0,
 		      'DEBUG'      =>  0,
 		      'CLOBBER'    =>  0,
+		      'CASESENSITIV' => 0,
 		      );
 
 # DBD drivers that work correctly with bound variables
 my %CAN_BIND = (
+                'ODBC' => 1,
 		'mysql' => 1,
 		'mSQL'  => 1,
 		'Oracle' => 1,
@@ -26,6 +35,10 @@ my %CAN_BIND = (
 		'Informix'  => 1,
 		'Solid'  => 1,
 	       );
+my %CANNOT_LISTFIELDS = (
+			 'SQLite' => 1,
+			 'Oracle' => 1,
+			);
 my %CAN_BINDSELECT = (
 		      'mysql' => 1,
 		      'mSQL'  => 1,
@@ -33,12 +46,14 @@ my %CAN_BINDSELECT = (
 		      'Pg'  => 1,
 		      'Informix'  => 1,
 		      'Solid'  => 1,
+                      'ODBC'  => 1,
 		     );
 my %BROKEN_INSERT = (
-		     'mSQL' => 1
+		     'mSQL' => 1,
+		     'CSV'  => 1,
 		     );
 my %NO_QUOTE =(
-	       'Sybase' => {map {$_=>1} (6..17,20,24)},
+	       'Sybase' => {map {$_=>1} (2,6..17,20,24)},
 	     );
 my %DOES_IN = (
 	       'mysql' => 1,
@@ -66,7 +81,6 @@ sub TIEHASH {
 	defined($opt) ? %$opt : ()
 	};
     bless $self,$class;
-
     my ($dbh,$driver);
 
     if (UNIVERSAL::isa($dsn,'DBI::db')) {
@@ -91,13 +105,21 @@ sub TIEHASH {
 	croak "TIEHASH: Can't open $dsn, ",$class->errstr unless $dbh;
       }
 
+    if ($driver eq 'Oracle')
+    {
+    	#set date format
+    	my $sth = $dbh->prepare("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'");
+    	$sth->execute();
+    }
+    
     # set up more instance variables
-    @{$self}{'dbh','table','key'} = ($dbh, $table, $key );
+    @{$self}{'dbh','table','key','driver'} = ($dbh, $table, $key, $driver);
     $self->{BrokenInsert}  = $BROKEN_INSERT{$driver};
     $self->{CanBind}       = $CAN_BIND{$driver};
     $self->{CanBindSelect} = $self->{CanBind} && $CAN_BINDSELECT{$driver};
     $self->{NoQuote}       = $NO_QUOTE{$driver};
     $self->{DoesIN}        = $DOES_IN{$driver};
+    $self->{CannotListfields} = $CANNOT_LISTFIELDS{$driver};
 
     return $self;
 }
@@ -195,7 +217,7 @@ sub EXISTS {
     $st->fetch;
     my $rows = $st->rows;
     $st->finish;
-    $rows > 0;
+    $rows != 0;
 }
 
 sub CLEAR {
@@ -248,18 +270,19 @@ sub STORE {
     return undef unless @fields;
     my (@values) = map { $value->{$_} } @fields;
 
-    # Attempt an insert.  If that fails (usually because the key already exists), 
-    # perform an update. For this to work correctly, the key field MUST be marked
+    # Attempt an insert.  If that fails (usually because the key already exists),
+    # perform an update. For this to work correctly, the key field MUST be marked unique
     my $result;
     if ($s->{BrokenInsert}) {  # check for broken drivers
-	$result = $s->EXISTS($key) ? 
+	$result = $s->EXISTS($key) ?
 	    $s->_update($key,\@fields,\@values)
 		:  $s->_insert($key,\@fields,\@values);
     } else {
-      my $errors;
-      $errors = $s->{'dbh'}->{PrintError} if $s->{'needs_disconnect'};  # not ours
-      $result = $s->_insert($key,\@fields,\@values) || $s->_update($key,\@fields,\@values);
-      $s->{'dbh'}->{PrintError} = $errors if $s->{'needs_disconnect'};  # not ours
+      $result = eval {
+      local($s->{'dbh'}->{PrintError}) = 0; # suppress warnings
+      $s->_insert($key,\@fields,\@values);
+      }
+      || $s->_update($key,\@fields,\@values);
     }
     croak "STORE: ",$s->errstr if $s->error;
 
@@ -351,14 +374,23 @@ sub _fields {
 
 	local($^W) = 0;  # kill uninitialized variable warning
 	my $sth = $dbh->prepare("LISTFIELDS $table");
-	unless (defined($sth) && $sth->execute) {  # doesn't support LISTFIELDS, so try SELECT *
+
+	# doesn't support LISTFIELDS, so try SELECT *
+	unless (!$self->{CannotListfields} && defined($sth) && $sth->execute) {  
 	  $sth = $dbh->prepare("SELECT * FROM $table WHERE 0=1") ||
 		croak "_fields() failed during prepare(SELECT) statement: ",$self->errstr;
 	  $sth->execute() ||
 	    croak "_fields() failed during execute(SELECT) statement: ",$self->errstr;
 	}
 	# if we get here, we can fetch the names of the fields
-	my %fields = map { lc($_)=>1 } @{$sth->{NAME}};
+	my %fields;
+	if ($self->{'CASESENSITIV'}) { 
+		%fields = map { $_=>1 } @{$sth->{NAME}};
+	}
+	else {
+		%fields = map { lc($_)=>1 } @{$sth->{NAME}}; 
+	}
+	
 	$sth->finish;
 	$self->{'fields'} = \%fields;
     }
@@ -368,13 +400,27 @@ sub _fields {
 sub _types {
   my $self = shift;
   return $self->{'types'} if $self->{'types'};
-  my $sth = $self->{'dbh'}->prepare("SELECT * FROM $self->{table} WHERE 0=1") ||
-    croak "_types() failed during prepare(SELECT) statement: $DBI::errstr";
-  $sth->execute() ||
-    croak "_types() failed during execute(SELECT) statement: $DBI::errstr";
-  my $types = $sth->{TYPE};
-  my $names = $sth->{NAME};
-  my %types = map { shift(@$names) => $_ } @$types;
+  my ($sth,%types);
+  
+  if($self->{'driver'} eq 'Oracle') {
+    $sth = $self->{'dbh'}->prepare("SELECT column_name,data_type FROM ALL_TAB_COLUMNS WHERE TABLE_NAME = " . $self->{'dbh'}->quote("$self->{table}"));
+    $sth->execute()||
+      croak "_types() failed during execute(SELECT) statement: $DBI::errstr";
+    		
+    while (my ($col_name,$col_type)=$sth->fetchrow()) {
+      $types{$col_name} =  $col_type;
+    }
+  }
+
+  else {
+    $sth = $self->{'dbh'}->prepare("SELECT * FROM $self->{table} WHERE 0=1") ||
+      croak "_types() failed during prepare(SELECT) statement: $DBI::errstr";
+    $sth->execute() ||
+      croak "_types() failed during execute(SELECT) statement: $DBI::errstr";
+    my $types = $sth->{TYPE};
+    my $names = $sth->{NAME};
+    %types = map { shift(@$names) => $_ } @$types;
+  }
   return $self->{'types'} = \%types;
 }
 
@@ -392,6 +438,9 @@ sub _fetch_field ($$) {
     my (@r,@results);
     while (@r = $st->fetchrow_array) {
 	my @i = map {$valid->{$_} ? shift @r : undef} @$fields;
+        if ($s->{ENCODING}) {
+            @i = map { _decode($s->{ENCODING}, $_) } @i;
+        }
 	push(@results,(@$fields == 1) ? $i[0] : [@i]);
     }
 
@@ -419,31 +468,69 @@ sub _update {
     $key = $s->_quote($s->{key},$key) unless $s->{CanBindSelect};
     local($") = ',';
     my $st = $s->_run_query("update@$fields",
-			    "update $s->{table} set @set where $s->{key}=?",@values,$key);
-    return $st ? $st->rows : undef;
+			  "update $s->{table} set @set where $s->{key}=?",@values,$key);
+    return unless $st;
+    return $st->rows;
 }
 
 sub _quote_many {
   my ($s,$fields,$values) = @_;
-  return @$values if $s->{CanBind};
-  return map { $s->{'db'}->quote($_) } @$values 
-    unless my $noquote = $s->{NoQuote};
+
+  if ($s->{CanBind}) {
+      if ($s->{ENCODING}) {
+         return map { _encode($s->{ENCODING}, $_) } @$values;
+      }
+      else {
+         return @$values;
+      }
+  }
+
+  my $noquote = $s->{NoQuote};
+  unless ($noquote) {
+      if ($s->{ENCODING}) {
+         return map { $s->{'dbh'}->quote(_encode($s->{ENCODING}, $_)) } @$values 
+      }
+      else {
+         return map { $s->{'dbh'}->quote($_) } @$values 
+      }
+  }
   my @values = @$values;
   my $types = $s->_types;
-  my $count = 0;
-  foreach (@values) {
-    next if $noquote->{$types->{$fields->[$count++]}};
-    $_ = $s->{'dbh'}->quote($_);
+  for (my $i=0;$i<@values;$i++) {
+    next if $noquote->{$types->{$fields->[$i]}};
+    if ($s->{'driver'} eq 'Oracle' && $types->{$fields->[$i]} eq 'DATE') {
+      my $epoch_date=str2time($values[$i]);
+      my $temp = time2iso($epoch_date);
+      $temp = $s->{'dbh'}->quote($temp);
+      $values[$i]=$temp ;
+    }
+    else {
+      $values[$i] = $s->{'dbh'}->quote($values[$i]);
+    }
   }
   return @values;
 }
 
 sub _quote {
   my ($s,$field,$value) = @_;
-  return $s->{'dbh'}->quote($value) 
-    unless my $noquote = $s->{NoQuote};
   my $types = $s->_types;
-  return $noquote->{$types->{$field}} ? $value : $s->{'dbh'}->quote($value);
+  if (my $noquote = $s->{NoQuote}) {
+    return $noquote->{$types->{$field}} ? $value : $s->{'dbh'}->quote($value);
+  }
+  
+  if ($s->{'driver'} eq 'Oracle' && $types->{$field} eq 'DATE') {
+    my $epoch_date=str2time($value);
+    my $temp = time2iso($epoch_date);
+    $temp = $s->{'dbh'}->quote($temp);
+    #my $temp = $s->{'dbh'}->quote($value);
+    $temp = "to_date($temp,'YYYY-MM-DD HH24:MI:SS')";
+    return $temp;
+  }
+  else {
+    $value = _encode($s->{ENCODING}, $value) if $s->{ENCODING};
+    $value = $s->{'dbh'}->quote($value);
+    return $value;
+  }
 }
 
 sub _prepare ($$$) {
@@ -457,6 +544,18 @@ sub _prepare ($$$) {
 	$self->{$tag}->finish if $q;  # in case we forget
     }
     $self->{$tag};
+}
+
+sub _encode {
+  eval {
+    return Encode::encode($_[0], $_[1]);
+  }
+}
+
+sub _decode {
+  eval {
+    return Encode::decode($_[0], $_[1]);
+  }
 }
 
 package Tie::DBI::Record;
@@ -703,6 +802,12 @@ If set to a non-zero value, warns of illegal operations, such as
 attempting to delete the value of the key column.  If set to a zero
 value, these errors will be ignored silently.
 
+=item CASESENSITIV (default 0)
+
+If set to a non-zero value, all Fieldnames are casesensitiv. Keep
+in mind, that your database has to support casesensitiv Fields if
+you want to use it.
+
 =back
 
 =head1 USING THE TIED ARRAY
@@ -892,7 +997,7 @@ connections in Apache modules:
     return Apache::DBI->connect($dsn,$user,
                                 $password,$options);
  }
-
+  
 =item commit()
 
    (tied %produce)->commit();
@@ -926,7 +1031,7 @@ that is legal in the WHERE clause is allowed, including function
 calls, ordering specifications, and sub-selects.  The keys to those
 records that meet the specified conditions are returned as an array,
 in the order in which the select statement returned them.
-
+ 
 Don't expect too much from this function.  If you want to execute a
 complex query, you're better off using the database handle (see below)
 to make the SQL query yourself with the DBI interface.
@@ -939,7 +1044,7 @@ This returns the tied hash's underlying database handle.  You can use
 this handle to create and execute your own SQL queries.
 
 =item CLOBBER, DEBUG, WARN
-
+   
 You can get and set the values of CLOBBER, DEBUG and WARN by directly
 accessing the object's hash:
 
@@ -1018,7 +1123,7 @@ modify it under the same terms as Perl itself.
 The latest version can be obtained from:
    
    http://www.genome.wi.mit.edu/~lstein/Tie-DBI/
-
+   
 =head1 SEE ALSO
 
 perl(1), DBI(3), Tie::RDBM(3)

@@ -143,7 +143,7 @@ sub TIEHASH {
 	'value'     => $opt->{'value'},
 	'frozen'    => $opt->{'frozen'},
 	'canfreeze' => $canfreeze,
-	'brokenselect'  => $driver eq 'mSQL',
+	'brokenselect'  => $driver eq 'mSQL' || $driver eq 'mysql',
 	'canbind'   => $CAN_BIND{$driver},
 	'DEBUG'     => $opt->{DEBUG},
     },$class;
@@ -264,7 +264,7 @@ sub DESTROY {
     foreach (qw/fetch update insert delete clear exists fetchkeys/) {
 	$self->{$_}->finish if $self->{$_};
     }
-    $self->{'dbh'}->disconnect();
+    $self->{'dbh'}->disconnect() if $self->{'dbh'};
 }
 
 sub commit {

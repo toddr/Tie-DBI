@@ -1,5 +1,11 @@
 Revision history for Perl extension Tie::DBI.
 
+0.93 Fri Jul 18 13:24:30 EDT 2003
+	Improved support for Oracle data types courtesy Luogang <lgjut@sina.com>.
+
+0.92 Tue Dec 31 12:50:33 EST 2002
+	ODBC support courtesy Autrijus Tang <autrijus@autrijus.org>
+
 0.86 August 7, 2000
 	Fixed bug in EXISTS that shows up when using DBD::InterBase.
 	Thanks to Michael Samanov for this.
