@@ -42,7 +42,10 @@ if ($DRIVER) {
     die "Found no DBD driver to use.\n";
 }
 
-my($dsn) = "dbi:$DRIVER:${\DBNAME}";
+my $dsn;
+if ($DRIVER eq 'Pg') { $dsn = "dbi:$DRIVER:dbname=${\DBNAME}"; }
+                else { $dsn = "dbi:$DRIVER:${\DBNAME}";        }
+
 print "ok 1\n";
 test 2,tie %h,Tie::RDBM,$dsn,{create=>1,drop=>1,table=>'PData','warn'=>0,user=>USER,password=>PASS};
 %h=();

@@ -93,7 +93,9 @@ sub test {
 
 sub initialize_database {
     local($^W) = 0;
-    my $dsn = "dbi:$DRIVER:${\DBNAME}";
+    my $dsn;
+    if ($DRIVER eq 'Pg') { $dsn = "dbi:$DRIVER:dbname=${\DBNAME}"; } 
+                    else { $dsn = "dbi:$DRIVER:${\DBNAME}";        }
     my $dbh = DBI->connect($dsn,USER,PASS,{ChopBlanks=>1}) || return undef;
     $dbh->do("DROP TABLE testTie");
     return $dbh if $DRIVER eq 'ExampleP';

@@ -1,5 +1,8 @@
 Revision history for Perl extension Tie::DBI.
 
+0.94 Wed Nov 17 17:05:07 EST 2004
+	Fix tests so that they work under PostGres, courtesy Arshavir Grigora
+
 0.93 Fri Jul 18 13:24:30 EDT 2003
 	Improved support for Oracle data types courtesy Luogang <lgjut@sina.com>.
 
