@@ -1,5 +1,8 @@
 Revision history for Perl extension Tie::DBI.
 
+0.85 April 26, 1999
+	Fixed stupid mistake: $DBI::error should be $DBI::err.
+
 0.70 September 25, 1998
 	- Now correctly supports Oracle.
 

@@ -11,11 +11,13 @@ $VERSION = '0.70';
 %Types = (                 # key          value          frozen    freeze  keyless
 	  'mysql'   => [qw/ varchar(127)  longblob       tinyint   1          0 /],
 	  'mSQL'    => [qw/ char(255)     char(255)      int       0          0 /],
+	  'Pg'      => [qw/ varchar(127)  varchar(2000)  int       0          0 /],
 	  'Sybase'  => [qw/ varchar(255)  varbinary(255) tinyint   1          0 /],
 	  'Oracle'  => [qw/ varchar(255)  varchar2(2000) integer   1          0 /],
 	  'CSV'     => [qw/ varchar(255)  varchar(255)   integer   1          1 /],
 	  'Informix'=> [qw/ nchar(120)    nchar(2000)    integer   0          0 /],
-	  'Solid'   => [qw/ varchar(255)  varbinary(2000) integer   1          0 /],  #others
+	  'Solid'   => [qw/ varchar(255)  varbinary(2000) integer  1          0 /],
+	  'ODBC'    => [qw/ varchar(255)  varbinary(2000) integer   1         0 /],
 	  'default' => [qw/ varchar(255)  varchar(255)   integer   0          0 /],  #others
 	  );
 
@@ -27,6 +29,7 @@ my %CAN_BIND = (
 		'Pg'    => 1,
 		'Informix' => 1,
 		'Solid'    => 1,
+		'ODBC'     => 1,
 	       );
 
 # Default options for the module
@@ -224,6 +227,10 @@ sub FIRSTKEY {
     my $self = shift;
     
     delete $self->{'cached_value'};
+    if ($self->{'fetchkeys'}) {
+      $self->{'fetchkeys'}->finish();  # to prevent truncation in ODBC driver
+      delete $self->{'fetchkeys'};
+    }
 
     my $sth = $self->_prepare('fetchkeys',$self->{'canfreeze'} ? <<END1 : <<END2);
 select $self->{'key'},$self->{'value'},$self->{'frozen'} from $self->{'table'}

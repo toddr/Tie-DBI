@@ -56,11 +56,18 @@ test 9,$h{'fred'} eq 'lucy';
 test 10,exists($h{'fred'});
 test 11,delete $h{'fred'};
 test 12,!exists($h{'fred'});
-test 13,$h{'fred'}={'name'=>'my name is fred','age'=>34};
+if (tied(%h)->{canfreeze})
 {
   local($^W) = 0;  # avoid uninitialized variable warning
+  test 13,$h{'fred'}={'name'=>'my name is fred','age'=>34};
   test 14,$h{'fred'}->{'age'} == 34;
+} else {
+  print STDERR "Skipping tests 13-14 on this platform...";
+  print "ok 13 (skipped)\n"; #skip
+  print "ok 14 (skipped)\n"; #skip
+  $h{'fred'} = 'junk';
 }
+
 test 15,join(" ",sort keys %h) eq "fred ricky";
 test 16,$h{'george'}=42;
 test 17,join(" ",sort keys %h) eq "fred george ricky";

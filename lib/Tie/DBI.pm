@@ -4,7 +4,7 @@ use strict;
 use vars qw($VERSION);
 use Carp;
 use DBI;
-$VERSION = '0.80';
+$VERSION = '0.85';
 
 # Default options for the module
 my %DefaultOptions = (
@@ -297,7 +297,7 @@ sub errstr {
 }
 
 sub error {
-  return $DBI::error;
+  return $DBI::err;
 }
 
 sub select_where {

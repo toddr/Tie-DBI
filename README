@@ -1,8 +1,9 @@
-This is Tie::DBI and Tie::RDBM, two modules that allow you to tie
-associative arrays to relational databases using the DBI library.  The
-hash is tied to a table in a local or networked database.  Reading
-from the hash retrieves values from the datavbase.  Storing into the
-hash updates the database (if you have sufficient privileges).
+This distribution contains Tie::DBI and Tie::RDBM, two modules that
+allow you to tie associative arrays to relational databases using the
+DBI library.  The hash is tied to a table in a local or networked
+database.  Reading from the hash retrieves values from the datavbase.
+Storing into the hash updates the database (if you have sufficient
+privileges).
 
 Tie::DBI implements a fully general binding between the hash and the
 table, allowing you to access fields in this manner:
@@ -53,25 +54,29 @@ And some drivers, such as Pg, want funny database names, as in:
    make test DRIVER=Pg DB=dbname=test USER=fred PASS=xyzzy
 
 Databases differ in their capabilities, and some can't support binary
-data types.  On those databases, Tie::RDBM test #14 will fail.  The
-same test will fail if you do not have Storable.pm installed on your
-system.  This is nothing to worry about.
+data types (or support them in a difficult, non-standard way).  Such
+databases include mSQL, Postgres and Informix.  On those databases, it
+is not possible to store arbitrary Perl data structures into Tie::RDBM
+hashes.  For this reason Tie::RDBM tests #13 and #14 will be skipped.
+The test will fail if you do not have Storable.pm installed on your
+system.
 
 The Postgres driver breaks when you try to set a field to null by
-passing it an under variable.  This causes test #29 to fail.
+passing it an under variable.  This causes Tie::DBI test #29 to fail.
 
 In addition, there is vast heterogeneity among DBD drivers which
 renders this interface inoperative for certain databases.  It has been 
 tested and is known to work on the following databases:
 
-	1) mysql
-	2) Oracle
-	3) mSQL (fails Tie::RDBM test #14)
-	4) CSV
-	5) Postgres (fails Tie::RDBM test #14 and Tie::DBI test #29)
-	6) Informix (fails Tie::RDBM test #14)
-	7) Sybase (partial, fails all each() tests)
-	8) Solid
+	1) DBD::mysql
+	2) DBD::Oracle
+	3) DBD::mSQL (skips Tie::RDB tests 13-14)
+	4) DBD::CSV (skips Tie::DBI test #29)
+	5) DBD::Postgres (skips Tie::RDBM tests 13-14 and flunks Tie::DBI test #29)
+	6) DBD::Informix (skips Tie::RDBM tests 13-14)
+	7) DBD::Sybase (partial, croaks on each())
+	8) DBD::Solid
+	9) DBD::ODBC (on mysql ODBC driver)
 
 Microsoft SQL server works partially with Tie::DBI (everything but
 "each") and not at all with Tie::RDBM.  This is because SQL server
@@ -79,12 +84,23 @@ doesn't allow there to be multiple pending queries on the database.
 Let me know if you can get it to run with true Sybase servers, and any
 other drivers you try.
 
-The home page for this module is
+For more information, see the perldoc documentation.  Also be sure to
+check out Gerald Richter's DBIx::Recordset, which puts a tied array
+interface on the results of arbitrary SQL expressions and is optimized 
+for use in embperl.
+
+References:
+
+This module's home page:
 http://stein.cshl.org/~lstein/Tie-DBI/.  See here for updates.
 
-For more information, see the perldoc documentation.
+The DBI home page:
+http://www.hermetica.com/technologia/perl/DBI
+
+Gerald Richter's DBIx::Recordset:
+http://perl.apache.org/embperl.html.
 
 Lincoln Stein
-September 18, 1998
+April 26, 1999
 
 

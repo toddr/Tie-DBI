@@ -121,9 +121,11 @@ sub chopBlanks {
 }
 
 test 1,$loaded;
-test 2,(my $dbh = &initialize_database),
-    "Couldn't create test table.  $DBI::errstr";
-die unless $dbh;
+my $dbh = initialize_database;
+{ local($^W)=0;
+  test 2,$dbh,"Couldn't create test table: $DBI::errstr";
+  die unless $dbh;
+}
 test 3,tie %h,Tie::DBI,{db=>$dbh,table=>'testTie',key=>'produce_id',CLOBBER=>3,WARN=>0};
 
 %h=();
