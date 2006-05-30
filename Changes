@@ -1,5 +1,9 @@
 Revision history for Perl extension Tie::DBI.
 
+1.02 Wed Dec 28 12:57:18 EST 2005
+	Clarified requirement that column used as hash key must be declared
+		unique when table is created.
+
 1.01 Mon Mar  7 18:51:27 EST 2005
 	More minor documentation fixes. (darn!)
 

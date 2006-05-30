@@ -7,3 +7,4 @@ lib/Tie/DBI.pm
 lib/Tie/RDBM.pm
 t/DBI.t
 t/RDBM.t
+META.yml                                 Module meta-data (added by MakeMaker)

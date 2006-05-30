@@ -4,7 +4,7 @@ use strict;
 use vars qw($VERSION);
 use Carp;
 use DBI;
-$VERSION = '1.01';
+$VERSION = '1.02';
 
 BEGIN {
   eval {
@@ -719,9 +719,10 @@ tables for you or modify the schema of the database.
 
 The column to use as the hash key.  This column must prevoiusly have
 been defined when the table was created.  In order for this module to
-work correctly, the key column I<must> be unique and not nullable.
-For best performance, the column should be also be declared a key.
-These three requirements are automatically satisfied for primary keys.
+work correctly, the key column I<must> be declared unique and not
+nullable.  For best performance, the column should be also be declared
+a key.  These three requirements are automatically satisfied for
+primary keys.
 
 =back
 
