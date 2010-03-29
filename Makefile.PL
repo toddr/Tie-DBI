@@ -4,9 +4,7 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     'NAME'	=> 'Tie::DBI',
     'VERSION_FROM' => 'lib/Tie/DBI.pm', # finds $VERSION
-#     'PREREQ_PM'    => {
-#			 Encode => 0.01,
-#		       },
+    'PREREQ_PM'    => { Test::More => 0 }, 
     'DISTNAME'  => 'Tie-DBI',
     'linkext'   => { LINKTYPE=>'' },	# no link needed
     'dist'      => {'COMPRESS'=>'gzip -9f', 'SUFFIX' => 'gz',

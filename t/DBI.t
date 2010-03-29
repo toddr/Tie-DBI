@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 33;
+use Test::More tests => 26;
 
 my $DRIVER = $ENV{DRIVER};
 use constant USER   => $ENV{USER};
@@ -81,10 +81,11 @@ sub initialize_database {
     my $dsn;
     if ($DRIVER eq 'Pg') { $dsn = "dbi:$DRIVER:dbname=${\DBNAME}"; } 
                     else { $dsn = "dbi:$DRIVER:${\DBNAME}:${\HOST}";        }
-    my $dbh = DBI->connect($dsn,USER,PASS,{ChopBlanks=>1}) || return undef;
+    my $dbh = DBI->connect($dsn,USER,PASS,{PrintError=>0}) || return undef;
     $dbh->do("DROP TABLE testTie");
     return $dbh if $DRIVER eq 'ExampleP';
     my $table = $TABLES{$DRIVER} || DEFAULT_TABLE;
+
     foreach (split(';',$table)) {
       $dbh->do($_) || warn $DBI::errstr;
     }
@@ -112,13 +113,17 @@ my %h;
 my $dbh = initialize_database;
 {
     local($^W)=0;
-    ok($dbh,"Couldn't create test table: $DBI::errstr") or die;
+    ok($dbh, "DBH returned from init_db") or die("Couldn't create test table: $DBI::errstr");
 }
 isa_ok(tie(%h,'Tie::DBI',{db=>$dbh,table=>'testTie',key=>'produce_id',CLOBBER=>3,WARN=>0}), 'Tie::DBI');
 
 %h=() unless $DRIVER eq 'ExampleP';
 is(scalar(keys %h), 0, '%h is empty');
-is(insert_data(\%h), scalar @test_data, "Insert data into db");
+
+{
+    local($^W = 0);
+    ok(insert_data(\%h), "Insert data into db");
+}
 ok(exists($h{strawberries}));
 ok(defined($h{strawberries}));
 is(join(" ",map {chopBlanks($_)} sort keys %h), "apricots bananas eggs kiwis strawberries");
@@ -156,11 +161,11 @@ is("@{$another_array}", 'strawberries 8');
 is(@fields = tied(%h)->select_where('quantity > 10'), 2);
 is(join(" ",sort @fields), 'bananas eggs');
 
-delete $h{strawberries}->{quantity};
-
 SKIP: {
     skip "Skipping test for CSV driver...", 1 if($DRIVER eq 'CSV');
-    ok(!exists ($h{strawberries}->{quantity}), 'Quantity was deleted');
+
+    delete $h{strawberries}->{quantity};
+    ok(!defined $h{strawberries}->{quantity}, 'Quantity was deleted');
 }
 
 ok($h{strawberries}->{quantity}=42);
