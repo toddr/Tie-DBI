@@ -1,12 +1,6 @@
-# Before `make install' is performed this script should be runnable with
-# `make test'. After `make install' it should work as `perl test.pl'
-
-######################### We start with some black magic to print on failure.
-
-# Change 1..1 below to 1..last_test_to_print .
-# (It may become useful if the test is moved to ./t subdirectory.)
-
-# change this if you need to
+use strict;
+use warnings;
+use Test::More tests => 33;
 
 my $DRIVER = $ENV{DRIVER};
 use constant USER   => $ENV{USER};
@@ -14,12 +8,8 @@ use constant PASS   => $ENV{PASS};
 use constant DBNAME => $ENV{DB} || 'test';
 use constant HOST   => $ENV{HOST} || ($^O eq 'cygwin') ? '127.0.0.1' : 'localhost';
 
-BEGIN { $| = 1; print "1..32\n"; }
-END {print "not ok 1\n" unless $loaded;}
-use lib './lib','../lib';
 use DBI;
 use Tie::DBI;
-$loaded = 1;
 
 ######################### End of black magic.
 
@@ -28,11 +18,11 @@ unless ($DRIVER) {
     # I like mysql best, followed by Oracle and Sybase
     my ($count) = 0;
     my (%DRIVERS) = map { ($_,$count++) } qw(Informix Pg Ingres mSQL Sybase Oracle mysql SQLite); # ExampleP doesn't work;
-    ($DRIVER) = sort { $DRIVERS{$b}<=>$DRIVERS{$a} } DBI->available_drivers(1);
+    ($DRIVER) = sort { $DRIVERS{$b}<=>$DRIVERS{$a} } grep {exists $DRIVERS{$_}} DBI->available_drivers(1);
 }
 
 if ($DRIVER) {
-    print STDERR "Using DBD driver $DRIVER...";
+    diag("Using DBD driver $DRIVER...");
 } else {
     die "Found no DBD driver to use.\n";
 }
@@ -86,17 +76,11 @@ my @test_data = (
 		 ['eggs',        1.00, 12,      'Farm-fresh Atlantic eggs']
 		 );
 
-sub test {
-    local($^W) = 0;
-    my($num, $true,$msg) = @_;
-    print($true ? "ok $num\n" : "not ok $num $msg\n");
-}
-
 sub initialize_database {
     local($^W) = 0;
     my $dsn;
-    if ($DRIVER eq 'Pg') { $dsn = "dbi:$DRIVER:dbname=${\DBNAME}";  } 
-                    else { $dsn = "dbi:$DRIVER:${\DBNAME}:${\HOST}";}
+    if ($DRIVER eq 'Pg') { $dsn = "dbi:$DRIVER:dbname=${\DBNAME}"; } 
+                    else { $dsn = "dbi:$DRIVER:${\DBNAME}:${\HOST}";        }
     my $dbh = DBI->connect($dsn,USER,PASS,{ChopBlanks=>1}) || return undef;
     $dbh->do("DROP TABLE testTie");
     return $dbh if $DRIVER eq 'ExampleP';
@@ -124,23 +108,23 @@ sub chopBlanks {
   $a;
 }
 
-test 1,$loaded;
+my %h;
 my $dbh = initialize_database;
-{ local($^W)=0;
-  test 2,$dbh,"Couldn't create test table: $DBI::errstr";
-  die unless $dbh;
+{
+    local($^W)=0;
+    ok($dbh,"Couldn't create test table: $DBI::errstr") or die;
 }
-test 3,tie %h,Tie::DBI,{db=>$dbh,table=>'testTie',key=>'produce_id',CLOBBER=>3,WARN=>0};
+isa_ok(tie(%h,'Tie::DBI',{db=>$dbh,table=>'testTie',key=>'produce_id',CLOBBER=>3,WARN=>0}), 'Tie::DBI');
 
 %h=() unless $DRIVER eq 'ExampleP';
-test 4,!scalar(keys %h);
-test 5,insert_data(\%h);
-test 6,exists($h{strawberries});
-test 7,defined($h{strawberries});
-test 8,join(" ",map {chopBlanks($_)} sort keys %h) eq "apricots bananas eggs kiwis strawberries";
-test 9,$h{eggs}->{quantity} == 12;
-test 10,$h{eggs}->{quantity} *= 2;
-test 11,$h{eggs}->{quantity} == 24;
+is(scalar(keys %h), 0, '%h is empty');
+is(insert_data(\%h), scalar @test_data, "Insert data into db");
+ok(exists($h{strawberries}));
+ok(defined($h{strawberries}));
+is(join(" ",map {chopBlanks($_)} sort keys %h), "apricots bananas eggs kiwis strawberries");
+is($h{eggs}->{quantity}, 12);
+$h{eggs}->{quantity} *= 2;
+is($h{eggs}->{quantity}, 24);
 
 my $total_price = 0;
 my $count = 0;
@@ -149,35 +133,36 @@ while (($key,$value) = each %h) {
     $total_price += $value->{price} * $value->{quantity};
     $count++;
 }
-test 12,$count == 5;
-test 13,abs($total_price - 85.2) < 0.01;
+is($count, 5);
+cmp_ok(abs($total_price - 85.2),  '<', 0.01);
 
-test 14,$h{'cherries'} = { description=>'Vine-ripened cherries',price=>2.50,quantity=>200 };
-test 15,$h{'cherries'}{quantity} == 200;
-test 16,$h{'cherries'} = { price => 2.75 };
-test 17,$h{'cherries'}{quantity} == 200;
-test 18,$h{'cherries'}{price} == 2.75;
-test 19,join(" ",map {chopBlanks($_)} sort keys %h) eq "apricots bananas cherries eggs kiwis strawberries";
+$h{'cherries'} = { description=>'Vine-ripened cherries',price=>2.50,quantity=>200 };
+is($h{'cherries'}{quantity}, 200);
 
-test 20,delete $h{'cherries'};
-test 21,!$h{'cherries'};
+$h{'cherries'} = { price => 2.75 };
+is($h{'cherries'}{quantity}, 200);
+is($h{'cherries'}{price}, 2.75);
+is(join(" ",map {chopBlanks($_)} sort keys %h), "apricots bananas cherries eggs kiwis strawberries");
 
-test 22,my $array = $h{'eggs','strawberries'};
-test 23,$array->[1]->{'description'} eq 'Fresh Maine strawberries';
+ok(delete $h{'cherries'});
+is(exists $h{'cherries'}, '');
 
-test 24,my $another_array = $array->[1]->{'produce_id','quantity'};
-test 25,"@{$another_array}" eq 'strawberries 8';
+my $array = $h{'eggs','strawberries'};
+is($array->[1]->{'description'}, 'Fresh Maine strawberries');
 
-test 26,@fields = tied(%h)->select_where('quantity > 10');
-test 27,join(" ",sort @fields) eq 'bananas eggs';
+my $another_array = $array->[1]->{'produce_id','quantity'};
+is("@{$another_array}", 'strawberries 8');
 
-test 28,delete $h{strawberries}->{quantity};
-if ($DRIVER eq 'CSV') {
-	print STDERR "Skipping test 29 for CSV driver...";
-	print "ok 29\n";
-} else {
-  test 29,!defined($h{strawberries}->{quantity});
+is(@fields = tied(%h)->select_where('quantity > 10'), 2);
+is(join(" ",sort @fields), 'bananas eggs');
+
+delete $h{strawberries}->{quantity};
+
+SKIP: {
+    skip "Skipping test for CSV driver...", 1 if($DRIVER eq 'CSV');
+    ok(!exists ($h{strawberries}->{quantity}), 'Quantity was deleted');
 }
-test 30,$h{strawberries}->{quantity}=42;
-test 31,$h{strawberries}->{quantity}=42;  # make sure update statement works when nothing changes
-test 32,$h{strawberries}->{quantity}==42;
+
+ok($h{strawberries}->{quantity}=42);
+ok($h{strawberries}->{quantity}=42);  # make sure update statement works when nothing changes
+is($h{strawberries}->{quantity}, 42);
