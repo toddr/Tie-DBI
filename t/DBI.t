@@ -22,7 +22,7 @@ unless ($DRIVER) {
 }
 
 if ($DRIVER) {
-    diag("Using DBD driver $DRIVER...");
+    diag("DBI.t - Using DBD driver $DRIVER...");
 } else {
     die "Found no DBD driver to use.\n";
 }

@@ -4,7 +4,7 @@ Revision history for Perl extension Tie::DBI.
 	RT 3695 - SQLite support - Thanks RURBAN
 	RT 19833 - Don't Chomp blanks. The user can do that in their script if they intended it.
 	   NOTE!!! This may break your code if you were depending on this behavior. Please open an RT ticket if you feel this needs to be put back in.
-    DBI.t to Test::More for better debugging
+	Test suite to Test::More
 
 1.02 Wed Dec 28 12:57:18 EST 2005
 	Clarified requirement that column used as hash key must be declared
