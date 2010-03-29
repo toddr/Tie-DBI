@@ -12,6 +12,7 @@ my $DRIVER = $ENV{DRIVER};
 use constant USER   => $ENV{USER};
 use constant PASS   => $ENV{PASS};
 use constant DBNAME => $ENV{DB} || 'test';
+use constant HOST   => $ENV{HOST} || ($^O eq 'cygwin') ? '127.0.0.1' : 'localhost';
 
 BEGIN { $| = 1; print "1..32\n"; }
 END {print "not ok 1\n" unless $loaded;}
@@ -26,7 +27,7 @@ unless ($DRIVER) {
     local($^W)=0;  # kill uninitialized variable warning
     # I like mysql best, followed by Oracle and Sybase
     my ($count) = 0;
-    my (%DRIVERS) = map { ($_,$count++) } qw(Informix Pg Ingres mSQL Sybase Oracle mysql); # ExampleP doesn't work;
+    my (%DRIVERS) = map { ($_,$count++) } qw(Informix Pg Ingres mSQL Sybase Oracle mysql SQLite); # ExampleP doesn't work;
     ($DRIVER) = sort { $DRIVERS{$b}<=>$DRIVERS{$a} } DBI->available_drivers(1);
 }
 
@@ -94,8 +95,8 @@ sub test {
 sub initialize_database {
     local($^W) = 0;
     my $dsn;
-    if ($DRIVER eq 'Pg') { $dsn = "dbi:$DRIVER:dbname=${\DBNAME}"; } 
-                    else { $dsn = "dbi:$DRIVER:${\DBNAME}";        }
+    if ($DRIVER eq 'Pg') { $dsn = "dbi:$DRIVER:dbname=${\DBNAME}";  } 
+                    else { $dsn = "dbi:$DRIVER:${\DBNAME}:${\HOST}";}
     my $dbh = DBI->connect($dsn,USER,PASS,{ChopBlanks=>1}) || return undef;
     $dbh->do("DROP TABLE testTie");
     return $dbh if $DRIVER eq 'ExampleP';

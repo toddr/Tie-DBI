@@ -12,6 +12,7 @@ my $DRIVER = $ENV{DRIVER};
 use constant USER => $ENV{USER};
 use constant PASS => $ENV{PASS};
 use constant DBNAME => $ENV{DB} || 'test';
+use constant HOST   => $ENV{HOST} || ($^O eq 'cygwin') ? '127.0.0.1' : 'localhost';
 
 BEGIN { $| = 1; print "1..20\n"; }
 END {print "not ok 1\n" unless $loaded;}
@@ -32,7 +33,7 @@ unless ($DRIVER) {
     local($^W)=0;  # kill uninitialized variable warning
 # Test using the mysql, sybase, oracle and mSQL databases respectively
     my ($count) = 0;
-    my (%DRIVERS) = map { ($_,$count++) } qw(Informix Pg Ingres mSQL Sybase Oracle mysql); # ExampleP doesn't work
+    my (%DRIVERS) = map { ($_,$count++) } qw(Informix Pg Ingres mSQL Sybase Oracle mysql SQLite); # ExampleP doesn't work
     ($DRIVER) = sort { $DRIVERS{$b}<=>$DRIVERS{$a} } DBI->available_drivers(1);
 }
 
@@ -44,7 +45,7 @@ if ($DRIVER) {
 
 my $dsn;
 if ($DRIVER eq 'Pg') { $dsn = "dbi:$DRIVER:dbname=${\DBNAME}"; }
-                else { $dsn = "dbi:$DRIVER:${\DBNAME}";        }
+                else { $dsn = "dbi:$DRIVER:${\DBNAME}:${\HOST}"; }
 
 print "ok 1\n";
 test 2,tie %h,'Tie::RDBM',$dsn,{create=>1,drop=>1,table=>'PData','warn'=>0,user=>USER,password=>PASS};

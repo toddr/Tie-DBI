@@ -45,9 +45,9 @@ specifying DRIVER=<driver name> on the command line.  For example:
 
 If you need to specify a different database, or need to provide a
 username and password to log in, you can provide these values as DB,
-USER and PASS, respectively, as in:
+USER, PASS and HOST, respectively, as in:
 
-   make test DRIVER=Oracle DB=DEMO USER=fred PASS=xyzzy
+   make test DRIVER=Oracle DB=DEMO USER=fred PASS=xyzzy HOST=localhost
 
 And some drivers, such as Pg, want funny database names, as in:
 
@@ -77,6 +77,7 @@ tested and is known to work on the following databases:
 	7) DBD::Sybase (partial, croaks on each())
 	8) DBD::Solid
 	9) DBD::ODBC (on mysql ODBC driver)
+	10) DBD::SQLite
 
 Microsoft SQL server works partially with Tie::DBI (everything but
 "each") and not at all with Tie::RDBM.  This is because SQL server
