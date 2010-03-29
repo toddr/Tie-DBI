@@ -166,3 +166,10 @@ SKIP: {
 ok($h{strawberries}->{quantity}=42);
 ok($h{strawberries}->{quantity}=42);  # make sure update statement works when nothing changes
 is($h{strawberries}->{quantity}, 42);
+
+# RT 19833 - Trailing space inappropriatley stripped.
+use constant TEST_STRING => '  extra spaces  ';
+my $before = TEST_STRING;
+$h{strawberries}->{description} = $before;
+my $after = $h{strawberries}->{description};
+is($after, $before, "blanks aren't chopped");
