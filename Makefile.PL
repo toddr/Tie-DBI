@@ -8,5 +8,6 @@ WriteMakefile(
     'DISTNAME'  => 'Tie-DBI',
     'linkext'   => { LINKTYPE=>'' },	# no link needed
     'dist'      => {'COMPRESS'=>'gzip -9f', 'SUFFIX' => 'gz',
-	            'ZIP'=>'/usr/bin/zip','ZIPFLAGS'=>'-rl'}
+	            'ZIP'=>'/usr/bin/zip','ZIPFLAGS'=>'-rl'},
+    'clean'     => { FILES => 'Tie-DBI-* test:* depth_test' },
 );
