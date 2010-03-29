@@ -96,7 +96,7 @@ sub TIEHASH {
 
 	$dbh = $class->connect($dsn,$self->{user},$self->{password},
                                { AutoCommit=>$self->{AUTOCOMMIT},
-				 ChopBlanks=>1,
+				 #ChopBlanks=>1, # Removed per RT 19833 This may break legacy code.
 				 PrintError=>0,
 				 Warn=>$self->{WARN},
 			       }
