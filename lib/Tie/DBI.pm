@@ -4,7 +4,7 @@ use strict;
 use vars qw($VERSION);
 use Carp;
 use DBI;
-$VERSION = '1.03';
+$VERSION = '1.04';
 
 BEGIN {
   eval {

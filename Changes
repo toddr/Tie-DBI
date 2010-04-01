@@ -1,5 +1,8 @@
 Revision history for Perl extension Tie::DBI.
 
+1.04 Mon Mar 31 22:25 2010
+	Add DBD::SQLite to build_requires meta so automated testing won't fail
+
 1.03 Mon Mar 29 13:00 2010
 	RT 3695 - SQLite support - Thanks RURBAN
 	RT 19833 - Don't Chomp blanks. The user can do that in their script if they intended it.

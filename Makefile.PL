@@ -8,7 +8,7 @@ WriteMakefile(
     'ABSTRACT_FROM' => 'lib/Tie/DBI.pm',
     'PREREQ_PM'    => { 
         Test::More => 0,
-        DBI        => 0, 
+        DBI        => 0,
     }, 
     ($ExtUtils::MakeMaker::VERSION >= 6.3002 ? ('LICENSE'        => 'perl', ) : ()),
     'DISTNAME'  => 'Tie-DBI',
@@ -18,7 +18,8 @@ WriteMakefile(
     'clean'     => { FILES => 'Tie-DBI-* test:* depth_test' },
 	'META_MERGE'  => {
         build_requires => {
-            'Test::More' => 0,  # For testing
+            'Test::More'  => 0,  # For testing
+            'DBD::SQLite' => 0,  # Make sure at least one DBD is there for automated testing
         },
         resources => {
             license => 'http://dev.perl.org/licenses/',
