@@ -8,79 +8,85 @@ $VERSION = '0.73';
 
 # %Types is used for creating the data table if it doesn't exist already.
 # You may want to edit this.
-%Types = (                 # key          value          frozen    freeze  keyless
-	  'mysql'   => [qw/ varchar(127)  longblob       tinyint   1          0 /],
-	  'mSQL'    => [qw/ char(255)     char(255)      int       0          0 /],
-	  'Pg'      => [qw/ varchar(127)  varchar(2000)  int       0          0 /],
-	  'Sybase'  => [qw/ varchar(255)  varbinary(255) tinyint   1          0 /],
-	  'Oracle'  => [qw/ varchar(255)  varchar2(2000) integer   1          0 /],
-	  'CSV'     => [qw/ varchar(255)  varchar(255)   integer   1          1 /],
-	  'Informix'=> [qw/ nchar(120)    nchar(2000)    integer   0          0 /],
-	  'Solid'   => [qw/ varchar(255)  varbinary(2000) integer  1          0 /],
-	  'ODBC'    => [qw/ varchar(255)  varbinary(2000) integer   1         0 /],
-	  'default' => [qw/ varchar(255)  varchar(255)   integer   0          0 /],  #others
-	  );
+%Types = (    # key          value          frozen    freeze  keyless
+    'mysql'    => [qw/ varchar(127)  longblob       tinyint   1          0 /],
+    'mSQL'     => [qw/ char(255)     char(255)      int       0          0 /],
+    'Pg'       => [qw/ varchar(127)  varchar(2000)  int       0          0 /],
+    'Sybase'   => [qw/ varchar(255)  varbinary(255) tinyint   1          0 /],
+    'Oracle'   => [qw/ varchar(255)  varchar2(2000) integer   1          0 /],
+    'CSV'      => [qw/ varchar(255)  varchar(255)   integer   1          1 /],
+    'Informix' => [qw/ nchar(120)    nchar(2000)    integer   0          0 /],
+    'Solid'    => [qw/ varchar(255)  varbinary(2000) integer  1          0 /],
+    'ODBC'     => [qw/ varchar(255)  varbinary(2000) integer   1         0 /],
+    'default'  => [qw/ varchar(255)  varchar(255)   integer   0          0 /],    #others
+);
 
 # list drivers that do run-time binding correctly
 my %CAN_BIND = (
-		'mysql' => 1,
-		'mSQL'  => 1,
-		'Oracle' => 1,
-		'Pg'    => 1,
-		'Informix' => 1,
-		'Solid'    => 1,
-		'ODBC'     => 1,
-	       );
+    'mysql'    => 1,
+    'mSQL'     => 1,
+    'Oracle'   => 1,
+    'Pg'       => 1,
+    'Informix' => 1,
+    'Solid'    => 1,
+    'ODBC'     => 1,
+);
 
 # Default options for the module
 my %DefaultOptions = (
-		      'table'      =>  'pdata',
-		      'key'        =>  'pkey',
-		      'value'      =>  'pvalue',
-		      'frozen'     =>  'pfrozen',
-		      'user'       =>  '',
-		      'password'   =>  '',
-		      'autocommit' =>  1,
-	              'create'     =>  0,
-                      'drop'       =>  0,
-		      'DEBUG'      =>  0,
-		      );
+    'table'      => 'pdata',
+    'key'        => 'pkey',
+    'value'      => 'pvalue',
+    'frozen'     => 'pfrozen',
+    'user'       => '',
+    'password'   => '',
+    'autocommit' => 1,
+    'create'     => 0,
+    'drop'       => 0,
+    'DEBUG'      => 0,
+);
 
 sub TIEHASH {
     my $class = shift;
-    my ($dsn,$opt) = ref($_[0]) ? (undef,$_[0]) : @_;
+    my ( $dsn, $opt ) = ref( $_[0] ) ? ( undef, $_[0] ) : @_;
     $dsn ||= $opt->{'db'};
 
     croak "Usage tie(%h,Tie::RDBM,<DBI_data_source>,\%options)" unless $dsn;
     if ($opt) {
-	foreach (keys %DefaultOptions) {
-	    $opt->{$_}=$DefaultOptions{$_} unless exists($opt->{$_});
-	}
-    } else {
-	$opt = \%DefaultOptions;
+        foreach ( keys %DefaultOptions ) {
+            $opt->{$_} = $DefaultOptions{$_} unless exists( $opt->{$_} );
+        }
+    }
+    else {
+        $opt = \%DefaultOptions;
     }
 
-    my($dbh,$driver);
+    my ( $dbh, $driver );
 
-    if (UNIVERSAL::isa($dsn,'DBI::db')) {
-	$dbh = $dsn;
-	$driver = $dsn->{Driver}{Name};
-    } else {
-	$dsn = "dbi:$dsn" unless $dsn=~ /^dbi/;
-	($driver) = $dsn =~ /\w+:(\w+)/;
-
-
-	# Try to establish connection with data source.
-	delete $ENV{NLS_LANG} if $driver eq 'Oracle';  # allow 8 bit connections?
-	$dbh = DBI->connect($dsn,$opt->{user},$opt->{password},
-			    { AutoCommit=>$opt->{autocommit},
-			      PrintError=>0,
-			      ChopBlanks=>1,
-			      Warn=>0 }
-			    );
-	croak "TIEHASH: Can't open $dsn, $DBI::errstr" unless $dbh;
+    if ( UNIVERSAL::isa( $dsn, 'DBI::db' ) ) {
+        $dbh    = $dsn;
+        $driver = $dsn->{Driver}{Name};
     }
-    
+    else {
+        $dsn = "dbi:$dsn" unless $dsn =~ /^dbi/;
+        ($driver) = $dsn =~ /\w+:(\w+)/;
+
+        # Try to establish connection with data source.
+        delete $ENV{NLS_LANG} if $driver eq 'Oracle';    # allow 8 bit connections?
+        $dbh = DBI->connect(
+            $dsn,
+            $opt->{user},
+            $opt->{password},
+            {
+                AutoCommit => $opt->{autocommit},
+                PrintError => 0,
+                ChopBlanks => 1,
+                Warn       => 0
+            }
+        );
+        croak "TIEHASH: Can't open $dsn, $DBI::errstr" unless $dbh;
+    }
+
     # A variety of shinanegans to handle freeze/thaw option.
     # We will serialize references if:
     # 1. The database driver supports binary types.
@@ -88,9 +94,9 @@ sub TIEHASH {
     # 3. The Storable module is available.
     # we also check that "primary key" is recognized
     my $db_features = $Types{$driver} || $Types{'default'};
-    my($canfreeze) = $db_features->[3];
-    my($keyless)   = $db_features->[4];
-    my($haveStorable) = eval 'require Storable;';
+    my ($canfreeze) = $db_features->[3];
+    my ($keyless)   = $db_features->[4];
+    my ($haveStorable) = eval 'require Storable;';
     Storable->import(qw/nfreeze thaw/) if $haveStorable;
     $canfreeze &&= $haveStorable;
 
@@ -100,122 +106,123 @@ sub TIEHASH {
     # This query tests that a table with the correct fields is present.
     # I would prefer to use a where clause of 1=0 but some dumb drivers (mSQL)
     # treat this as a syntax error!!!
-    my $q = "select * from $opt->{table} where $opt->{key}=''";
-    my $sth = $dbh->prepare($q);
+    my $q            = "select * from $opt->{table} where $opt->{key}=''";
+    my $sth          = $dbh->prepare($q);
     my $structure_ok = 0;
-    local($^W)=0; # uninitialized variable problem
-    if (defined($sth) && $sth->execute() ne '') { 
-	# At least the key field exists.  Check whether the others do too.
-	my(%field_names);
-	grep($field_names{lc($_)}++,@{$sth->{NAME}});
-	$structure_ok++ if $field_names{$opt->{'value'}};
-	$canfreeze &&= $field_names{$opt->{'frozen'}};
+    local ($^W) = 0;    # uninitialized variable problem
+    if ( defined($sth) && $sth->execute() ne '' ) {
+
+        # At least the key field exists.  Check whether the others do too.
+        my (%field_names);
+        grep( $field_names{ lc($_) }++, @{ $sth->{NAME} } );
+        $structure_ok++ if $field_names{ $opt->{'value'} };
+        $canfreeze &&= $field_names{ $opt->{'frozen'} };
     }
 
     unless ($structure_ok) {
 
-	unless ($opt->{'create'} || $opt->{'drop'}) {
-	    my $err = $DBI::errstr;
-	    $dbh->disconnect;
-	    croak "Table $opt->{table} does not have expected structure and creation forbidden: $err";
-	}
-	    
-	$dbh->do("drop table $opt->{table}") if $opt->{'drop'};
+        unless ( $opt->{'create'} || $opt->{'drop'} ) {
+            my $err = $DBI::errstr;
+            $dbh->disconnect;
+            croak "Table $opt->{table} does not have expected structure and creation forbidden: $err";
+        }
 
-	my($keytype,$valuetype,$frozentype) = @{$db_features};
-	my(@fields) = ($keyless ? "$opt->{key}    $keytype" : "$opt->{key}    $keytype primary key",
-		       "$opt->{value}  $valuetype");
-	push(@fields,  ($keyless ? "$opt->{frozen} $frozentype" : "$opt->{frozen} $frozentype not null") )
-	  if $canfreeze;
-	$q = "create table $opt->{table} (" . join(',',@fields) . ")";
-	warn "$q\n" if $opt->{DEBUG};
-	$dbh->do($q) || do {
-	    my $err = $DBI::errstr;
-	    $dbh->disconnect;
-	    croak("Can't initialize data table: $err");
-	}
+        $dbh->do("drop table $opt->{table}") if $opt->{'drop'};
+
+        my ( $keytype, $valuetype, $frozentype ) = @{$db_features};
+        my (@fields) = (
+            $keyless ? "$opt->{key}    $keytype" : "$opt->{key}    $keytype primary key",
+            "$opt->{value}  $valuetype"
+        );
+        push( @fields, ( $keyless ? "$opt->{frozen} $frozentype" : "$opt->{frozen} $frozentype not null" ) )
+          if $canfreeze;
+        $q = "create table $opt->{table} (" . join( ',', @fields ) . ")";
+        warn "$q\n" if $opt->{DEBUG};
+        $dbh->do($q) || do {
+            my $err = $DBI::errstr;
+            $dbh->disconnect;
+            croak("Can't initialize data table: $err");
+          }
     }
 
     return bless {
-	'dbh'       => $dbh,
-	'table'     => $opt->{'table'},
-	'key'       => $opt->{'key'},
-	'value'     => $opt->{'value'},
-	'frozen'    => $opt->{'frozen'},
-	'canfreeze' => $canfreeze,
-	'brokenselect'  => $driver eq 'mSQL' || $driver eq 'mysql',
-	'canbind'   => $CAN_BIND{$driver},
-	'DEBUG'     => $opt->{DEBUG},
-    },$class;
+        'dbh'          => $dbh,
+        'table'        => $opt->{'table'},
+        'key'          => $opt->{'key'},
+        'value'        => $opt->{'value'},
+        'frozen'       => $opt->{'frozen'},
+        'canfreeze'    => $canfreeze,
+        'brokenselect' => $driver eq 'mSQL' || $driver eq 'mysql',
+        'canbind'      => $CAN_BIND{$driver},
+        'DEBUG'        => $opt->{DEBUG},
+    }, $class;
 }
 
 sub FETCH {
-    my($self,$key) = @_;
+    my ( $self, $key ) = @_;
 
     # this is a hack to avoid doing an unnecessary SQL select
     # during an each() loop.
-    return $self->{'cached_value'}->{$key} 
-       if exists $self->{'cached_value'}->{$key};
+    return $self->{'cached_value'}->{$key}
+      if exists $self->{'cached_value'}->{$key};
 
     # create statement handler if it doesn't already exist.
     my $cols = $self->{'canfreeze'} ? "$self->{'value'},$self->{'frozen'}" : $self->{'value'};
-    my $sth = $self->_run_query('fetch',<<END,$key);
+    my $sth = $self->_run_query( 'fetch', <<END, $key );
 select $cols from $self->{table} where $self->{key}=?
 END
-    ;
     my $result = $sth->fetchrow_arrayref();
-    $sth->finish;    
+    $sth->finish;
     return undef unless $result;
-    $self->{'canfreeze'} && $result->[1] ? thaw($result->[0]) : $result->[0];
+    $self->{'canfreeze'} && $result->[1] ? thaw( $result->[0] ) : $result->[0];
 }
 
 sub STORE {
-    my($self,$key,$value) = @_;
+    my ( $self, $key, $value ) = @_;
 
     my $frozen = 0;
-    if (ref($value) && $self->{'canfreeze'}) {
-	$frozen++;
-	$value = nfreeze($value);
+    if ( ref($value) && $self->{'canfreeze'} ) {
+        $frozen++;
+        $value = nfreeze($value);
     }
 
     # Yes, this is ugly.  It is designed to minimize the number of SQL statements
     # for both database whose update statements return the number of rows updated,
     # and those (like mSQL) whose update statements don't.
-    my($r);
-    if ($self->{'brokenselect'}) {
-	return $self->EXISTS($key) ? $self->_update($key,$value,$frozen)
-		                   : $self->_insert($key,$value,$frozen);
+    my ($r);
+    if ( $self->{'brokenselect'} ) {
+        return $self->EXISTS($key)
+          ? $self->_update( $key, $value, $frozen )
+          : $self->_insert( $key, $value, $frozen );
     }
 
-    return $self->_update($key,$value,$frozen) || $self->_insert($key,$value,$frozen);
+    return $self->_update( $key, $value, $frozen ) || $self->_insert( $key, $value, $frozen );
 }
 
 sub DELETE {
-    my($self,$key) = @_;
-    my $sth = $self->_run_query('delete',<<END,$key);
+    my ( $self, $key ) = @_;
+    my $sth = $self->_run_query( 'delete', <<END, $key );
 delete from $self->{table} where $self->{key}=?
 END
-    ;
-    croak "Database delete statement failed: $DBI::errstr" if $sth->err;        
+    croak "Database delete statement failed: $DBI::errstr" if $sth->err;
     $sth->finish;
     1;
 }
 
 sub CLEAR {
     my $self = shift;
-    my $dbh = $self->{'dbh'};
-    my $sth= $self->_prepare('clear',"delete from $self->{table}");
-    $sth->execute();    
-    croak "Database delete all statement failed: $DBI::errstr" if $dbh->err;        
+    my $dbh  = $self->{'dbh'};
+    my $sth  = $self->_prepare( 'clear', "delete from $self->{table}" );
+    $sth->execute();
+    croak "Database delete all statement failed: $DBI::errstr" if $dbh->err;
     $sth->finish;
 }
 
 sub EXISTS {
-    my($self,$key) = @_;
-    my $sth = $self->_run_query('exists',<<END,$key);
+    my ( $self, $key ) = @_;
+    my $sth = $self->_run_query( 'exists', <<END, $key );
 select $self->{key} from $self->{table} where $self->{key}=?
 END
-    ;
     croak "Database select statement failed: $DBI::errstr" unless $sth;
     $sth->fetch;
     my $rows = $sth->rows;
@@ -225,19 +232,18 @@ END
 
 sub FIRSTKEY {
     my $self = shift;
-    
+
     delete $self->{'cached_value'};
-    if ($self->{'fetchkeys'}) {
-      $self->{'fetchkeys'}->finish();  # to prevent truncation in ODBC driver
-      delete $self->{'fetchkeys'};
+    if ( $self->{'fetchkeys'} ) {
+        $self->{'fetchkeys'}->finish();    # to prevent truncation in ODBC driver
+        delete $self->{'fetchkeys'};
     }
 
-    my $sth = $self->_prepare('fetchkeys',$self->{'canfreeze'} ? <<END1 : <<END2);
+    my $sth = $self->_prepare( 'fetchkeys', $self->{'canfreeze'} ? <<END1 : <<END2);
 select $self->{'key'},$self->{'value'},$self->{'frozen'} from $self->{'table'}
 END1
 select $self->{'key'},$self->{'value'} from $self->{'table'}
 END2
-    ;
 
     $sth->execute() || croak "Can't execute select statement: $DBI::errstr";
     my $ref = $sth->fetch();
@@ -246,23 +252,24 @@ END2
 
 sub NEXTKEY {
     my $self = shift;
+
     # no statement handler defined, so nothing to iterate over
     return wantarray ? () : undef unless my $sth = $self->{'fetchkeys'};
     my $r = $sth->fetch();
-    if (!$r) {
-	$sth->finish;
-	delete $self->{'cached_value'};
-	return wantarray ? () : undef;
+    if ( !$r ) {
+        $sth->finish;
+        delete $self->{'cached_value'};
+        return wantarray ? () : undef;
     }
-    my ($key,$value) = ($r->[0],$r->[2] ? thaw($r->[1]) : $r->[1]);
-    $self->{'cached_value'}->{$key}=$value;
-    return wantarray ? ($key,$value) : $key;
+    my ( $key, $value ) = ( $r->[0], $r->[2] ? thaw( $r->[1] ) : $r->[1] );
+    $self->{'cached_value'}->{$key} = $value;
+    return wantarray ? ( $key, $value ) : $key;
 }
 
 sub DESTROY {
     my $self = shift;
     foreach (qw/fetch update insert delete clear exists fetchkeys/) {
-	$self->{$_}->finish if $self->{$_};
+        $self->{$_}->finish if $self->{$_};
     }
     $self->{'dbh'}->disconnect() if $self->{'dbh'};
 }
@@ -277,44 +284,55 @@ sub rollback {
 
 # utility routines
 sub _update {
-    my ($self,$key,$value,$frozen) = @_;
+    my ( $self, $key, $value, $frozen ) = @_;
     my ($sth);
-    if ($self->{'canfreeze'}) {
-	$sth = $self->_run_query('update',
-				 "update $self->{table} set $self->{value}=?,$self->{frozen}=? where $self->{key}=?",
-				 $value,$frozen,$key);
-    } else {
-	$sth = $self->_run_query('update',
-				 "update $self->{table} set $self->{value}=? where $self->{key}=?",
-				 $value,$key);
+    if ( $self->{'canfreeze'} ) {
+        $sth = $self->_run_query(
+            'update',
+            "update $self->{table} set $self->{value}=?,$self->{frozen}=? where $self->{key}=?",
+            $value, $frozen, $key
+        );
     }
-    croak "Update: $DBI::errstr"  unless $sth;
+    else {
+        $sth = $self->_run_query(
+            'update',
+            "update $self->{table} set $self->{value}=? where $self->{key}=?",
+            $value, $key
+        );
+    }
+    croak "Update: $DBI::errstr" unless $sth;
     $sth->rows > 0;
 }
 
 sub _insert {
-    my ($self,$key,$value,$frozen) = @_;
+    my ( $self, $key, $value, $frozen ) = @_;
     my ($sth);
-    if ($self->{'canfreeze'}) {
-	$sth = $self->_run_query('insert',
-				 "insert into $self->{table} ($self->{key},$self->{value},$self->{frozen}) values (?,?,?)",
-				 $key,$value,$frozen);
-    } else {
-	$sth = $self->_run_query('insert',
-				 "insert into $self->{table} ($self->{key},$self->{value}) values (?,?)",
-				 $key,$value);
+    if ( $self->{'canfreeze'} ) {
+        $sth = $self->_run_query(
+            'insert',
+            "insert into $self->{table} ($self->{key},$self->{value},$self->{frozen}) values (?,?,?)",
+            $key, $value, $frozen
+        );
     }
-    ($sth && $sth->rows) || croak "Update: $DBI::errstr";
+    else {
+        $sth = $self->_run_query(
+            'insert',
+            "insert into $self->{table} ($self->{key},$self->{value}) values (?,?)",
+            $key, $value
+        );
+    }
+    ( $sth && $sth->rows ) || croak "Update: $DBI::errstr";
 }
 
 sub _run_query {
     my $self = shift;
-    my ($tag,$query,@bind_variables) = @_;
-    if ($self->{canbind}) {
-	my $sth = $self->_prepare($tag,$query);
-	return undef unless $sth->execute(@bind_variables);
-	return $sth;
+    my ( $tag, $query, @bind_variables ) = @_;
+    if ( $self->{canbind} ) {
+        my $sth = $self->_prepare( $tag, $query );
+        return undef unless $sth->execute(@bind_variables);
+        return $sth;
     }
+
     # if we get here, then we can't bind, so we replace ? with escaped parameters
     $query =~ s/\?/$self->{'dbh'}->quote(shift(@bind_variables))/eg;
     my $sth = $self->{'dbh'}->prepare($query);
@@ -323,15 +341,16 @@ sub _run_query {
 }
 
 sub _prepare ($$$) {
-    my($self,$tag,$q) = @_;
-    unless (exists($self->{$tag})) {
-	return undef unless $q;
-	warn $q,"\n" if $self->{DEBUG};
-	my $sth = $self->{'dbh'}->prepare($q);
-	croak qq/Problems preparing statement "$q": $DBI::errstr/ unless $sth;
-	$self->{$tag} = $sth;
-    } else {
-	$self->{$tag}->finish if $q;  # in case we forget
+    my ( $self, $tag, $q ) = @_;
+    unless ( exists( $self->{$tag} ) ) {
+        return undef unless $q;
+        warn $q, "\n" if $self->{DEBUG};
+        my $sth = $self->{'dbh'}->prepare($q);
+        croak qq/Problems preparing statement "$q": $DBI::errstr/ unless $sth;
+        $self->{$tag} = $sth;
+    }
+    else {
+        $self->{$tag}->finish if $q;    # in case we forget
     }
     $self->{$tag};
 }

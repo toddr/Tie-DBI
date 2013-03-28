@@ -7,230 +7,239 @@ use DBI;
 $VERSION = '1.05';
 
 BEGIN {
-  eval {
-    require Encode::compat if $] < 5.007001;
-    require Encode;
-  }
+    eval {
+        require Encode::compat if $] < 5.007001;
+        require Encode;
+    };
 }
 
 # Default options for the module
 my %DefaultOptions = (
-		      'user'       =>  '',
-		      'password'   =>  '',
-		      'AUTOCOMMIT' =>  1,
-		      'WARN'       =>  0,
-		      'DEBUG'      =>  0,
-		      'CLOBBER'    =>  0,
-		      'CASESENSITIV' => 0,
-		      );
+    'user'         => '',
+    'password'     => '',
+    'AUTOCOMMIT'   => 1,
+    'WARN'         => 0,
+    'DEBUG'        => 0,
+    'CLOBBER'      => 0,
+    'CASESENSITIV' => 0,
+);
 
 # DBD drivers that work correctly with bound variables
 my %CAN_BIND = (
-                'ODBC' => 1,
-                'AnyData' => 1,
-		'mysql' => 1,
-		'mSQL'  => 1,
-		'Oracle' => 1,
-		'CSV'  => 1,
-		'DBM'  => 1,
-		'Sys'  => 1,
-		'Pg'  => 1,
-		'PO'  => 1,
-		'Informix'  => 1,
-		'Solid'  => 1,
-	       );
+    'ODBC'     => 1,
+    'AnyData'  => 1,
+    'mysql'    => 1,
+    'mSQL'     => 1,
+    'Oracle'   => 1,
+    'CSV'      => 1,
+    'DBM'      => 1,
+    'Sys'      => 1,
+    'Pg'       => 1,
+    'PO'       => 1,
+    'Informix' => 1,
+    'Solid'    => 1,
+);
 my %CANNOT_LISTFIELDS = (
-			 'SQLite' => 1,
-			 'Oracle' => 1,
-			 'CSV' => 1,
-			 'DBM' => 1,
-			 'PO' => 1,
-			 'AnyData' => 1,
-			 'mysqlPP' => 1,
-			);
+    'SQLite'  => 1,
+    'Oracle'  => 1,
+    'CSV'     => 1,
+    'DBM'     => 1,
+    'PO'      => 1,
+    'AnyData' => 1,
+    'mysqlPP' => 1,
+);
 my %CAN_BINDSELECT = (
-		      'mysql' => 1,
-		      'mSQL'  => 1,
-		      'CSV'  => 1,
-		      'Pg'  => 1,
-		      'Sys'  => 1,
-		      'DBM'  => 1,
-		      'AnyData'  => 1,
-		      'PO'  => 1,
-		      'Informix'  => 1,
-		      'Solid'  => 1,
-                      'ODBC'  => 1,
-		     );
+    'mysql'    => 1,
+    'mSQL'     => 1,
+    'CSV'      => 1,
+    'Pg'       => 1,
+    'Sys'      => 1,
+    'DBM'      => 1,
+    'AnyData'  => 1,
+    'PO'       => 1,
+    'Informix' => 1,
+    'Solid'    => 1,
+    'ODBC'     => 1,
+);
 my %BROKEN_INSERT = (
-		     'mSQL' => 1,
-		     'CSV'  => 1,
-		     );
-my %NO_QUOTE =(
-	       'Sybase' => {map {$_=>1} (2,6..17,20,24)},
-	     );
+    'mSQL' => 1,
+    'CSV'  => 1,
+);
+my %NO_QUOTE = (
+    'Sybase' => { map { $_ => 1 } ( 2, 6 .. 17, 20, 24 ) },
+);
 my %DOES_IN = (
-	       'mysql' => 1,
-	       'Oracle' => 1,
-	       'Sybase' => 1,
-	       'CSV' => 1,
-	       'DBM' => 1, # at least with SQL::Statement
-	       'AnyData' => 1,
-	       'Sys' => 1,
-	       'PO' => 1,
-	       );
-
+    'mysql'   => 1,
+    'Oracle'  => 1,
+    'Sybase'  => 1,
+    'CSV'     => 1,
+    'DBM'     => 1,    # at least with SQL::Statement
+    'AnyData' => 1,
+    'Sys'     => 1,
+    'PO'      => 1,
+);
 
 # TIEHASH interface
 # tie %h,Tie::DBI,[dsn|dbh,table,key],\%options
 sub TIEHASH {
     my $class = shift;
-    my ($dsn,$table,$key,$opt);
-    if (ref($_[0]) eq 'HASH') {
-	$opt = shift;
-	($dsn,$table,$key) = @{$opt}{'db','table','key'};
-    } else {
-	($dsn,$table,$key,$opt) = @_;
+    my ( $dsn, $table, $key, $opt );
+    if ( ref( $_[0] ) eq 'HASH' ) {
+        $opt = shift;
+        ( $dsn, $table, $key ) = @{$opt}{ 'db', 'table', 'key' };
+    }
+    else {
+        ( $dsn, $table, $key, $opt ) = @_;
     }
 
-    croak "Usage tie(%h,Tie::DBI,dsn,table,key,\\%options)\n   or tie(%h,Tie::DBI,{db=>\$db,table=>\$table,key=>\$key})" 
+    croak "Usage tie(%h,Tie::DBI,dsn,table,key,\\%options)\n   or tie(%h,Tie::DBI,{db=>\$db,table=>\$table,key=>\$key})"
       unless $dsn && $table && $key;
     my $self = {
-	%DefaultOptions,
-	defined($opt) ? %$opt : ()
-	};
-    bless $self,$class;
-    my ($dbh,$driver);
+        %DefaultOptions,
+        defined($opt) ? %$opt : ()
+    };
+    bless $self, $class;
+    my ( $dbh, $driver );
 
-    if (UNIVERSAL::isa($dsn,'DBI::db')) {
-	$dbh = $dsn;
-	$driver = $dsn->{Driver}{Name};
-	$dbh->{Warn} = $self->{WARN};
-    } else {
-	$dsn = "dbi:$dsn" unless $dsn=~ /^dbi/;
-	($driver) = $dsn =~ /\w+:(\w+)/;
-
-	# Try to establish connection with data source.
-	delete $ENV{NLS_LANG};	# this gives us 8 bit characters ??
-
-	$dbh = $class->connect($dsn,$self->{user},$self->{password},
-                               { AutoCommit=>$self->{AUTOCOMMIT},
-				 #ChopBlanks=>1, # Removed per RT 19833 This may break legacy code.
-				 PrintError=>0,
-				 Warn=>$self->{WARN},
-			       }
-			      );
-	$self->{needs_disconnect}++;
-	croak "TIEHASH: Can't open $dsn, ",$class->errstr unless $dbh;
-      }
-
-    if ($driver eq 'Oracle')
-    {
-    	#set date format
-    	my $sth = $dbh->prepare("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'");
-    	$sth->execute();
+    if ( UNIVERSAL::isa( $dsn, 'DBI::db' ) ) {
+        $dbh         = $dsn;
+        $driver      = $dsn->{Driver}{Name};
+        $dbh->{Warn} = $self->{WARN};
     }
-    
+    else {
+        $dsn = "dbi:$dsn" unless $dsn =~ /^dbi/;
+        ($driver) = $dsn =~ /\w+:(\w+)/;
+
+        # Try to establish connection with data source.
+        delete $ENV{NLS_LANG};    # this gives us 8 bit characters ??
+
+        $dbh = $class->connect(
+            $dsn,
+            $self->{user},
+            $self->{password},
+            {
+                AutoCommit => $self->{AUTOCOMMIT},
+
+                #ChopBlanks=>1, # Removed per RT 19833 This may break legacy code.
+                PrintError => 0,
+                Warn       => $self->{WARN},
+            }
+        );
+        $self->{needs_disconnect}++;
+        croak "TIEHASH: Can't open $dsn, ", $class->errstr unless $dbh;
+    }
+
+    if ( $driver eq 'Oracle' ) {
+
+        #set date format
+        my $sth = $dbh->prepare("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'");
+        $sth->execute();
+    }
+
     # set up more instance variables
-    @{$self}{'dbh','table','key','driver'} = ($dbh, $table, $key, $driver);
-    $self->{BrokenInsert}  = $BROKEN_INSERT{$driver};
-    $self->{CanBind}       = $CAN_BIND{$driver};
-    $self->{CanBindSelect} = $self->{CanBind} && $CAN_BINDSELECT{$driver};
-    $self->{NoQuote}       = $NO_QUOTE{$driver};
-    $self->{DoesIN}        = $DOES_IN{$driver};
+    @{$self}{ 'dbh', 'table', 'key', 'driver' } = ( $dbh, $table, $key, $driver );
+    $self->{BrokenInsert}     = $BROKEN_INSERT{$driver};
+    $self->{CanBind}          = $CAN_BIND{$driver};
+    $self->{CanBindSelect}    = $self->{CanBind} && $CAN_BINDSELECT{$driver};
+    $self->{NoQuote}          = $NO_QUOTE{$driver};
+    $self->{DoesIN}           = $DOES_IN{$driver};
     $self->{CannotListfields} = $CANNOT_LISTFIELDS{$driver};
 
     return $self;
 }
 
 sub DESTROY {
-  $_[0]->{'dbh'}->disconnect if defined $_[0]->{'dbh'} 
-  && $_[0]->{needs_disconnect};
+    $_[0]->{'dbh'}->disconnect
+      if defined $_[0]->{'dbh'}
+      && $_[0]->{needs_disconnect};
 }
 
 sub FETCH {
-    my($s,$key) = @_;
+    my ( $s, $key ) = @_;
 
     # user could refer to $h{a,b,c}: handle this case
-    my (@keys) = split ($;,$key);
-    my ($tag,$query);
-    if (@keys > 1) {  # need an IN clause
-	my ($count) = scalar(@keys);
-	$tag = "fetch$count";
-	if (!$s->{CanBindSelect}) {
-	  foreach (@keys) { $_ =  $s->_quote($s->{key},$_); }
-	}
-	if ($s->{DoesIN}) {
-	  $query = "SELECT $s->{key} FROM $s->{table} WHERE $s->{key} IN (" .
-	    join(",",('?')x$count) . ')';
-	} else {
-	  $query = "SELECT $s->{key} FROM $s->{table} WHERE " . join (' OR ',("$s->{key}=?")x$count);
-	}
-    } else {
-	$tag = "fetch1";
-	@keys = $s->_quote($s->{key},$key) unless $s->{CanBindSelect};
-	$query = "SELECT $s->{key} FROM $s->{table} WHERE $s->{key} = ?";
+    my (@keys) = split( $;, $key );
+    my ( $tag, $query );
+    if ( @keys > 1 ) {    # need an IN clause
+        my ($count) = scalar(@keys);
+        $tag = "fetch$count";
+        if ( !$s->{CanBindSelect} ) {
+            foreach (@keys) { $_ = $s->_quote( $s->{key}, $_ ); }
+        }
+        if ( $s->{DoesIN} ) {
+            $query = "SELECT $s->{key} FROM $s->{table} WHERE $s->{key} IN (" . join( ",", ('?') x $count ) . ')';
+        }
+        else {
+            $query = "SELECT $s->{key} FROM $s->{table} WHERE " . join( ' OR ', ("$s->{key}=?") x $count );
+        }
     }
-    my $st = $s->_run_query($tag,$query,@keys) || croak "FETCH: ",$s->errstr;
+    else {
+        $tag   = "fetch1";
+        @keys  = $s->_quote( $s->{key}, $key ) unless $s->{CanBindSelect};
+        $query = "SELECT $s->{key} FROM $s->{table} WHERE $s->{key} = ?";
+    }
+    my $st = $s->_run_query( $tag, $query, @keys ) || croak "FETCH: ", $s->errstr;
 
     # slightly more efficient for one key
-    if (@keys == 1) {
-	my $r = $st->fetch;
-	$st->finish;
-	return undef unless $r;
-	my $h = {};
-	tie %$h,'Tie::DBI::Record',$s,$r->[0];
-	return $h;
-    } 
+    if ( @keys == 1 ) {
+        my $r = $st->fetch;
+        $st->finish;
+        return undef unless $r;
+        my $h = {};
+        tie %$h, 'Tie::DBI::Record', $s, $r->[0];
+        return $h;
+    }
 
     # general case -- multiple keys
-    my ($r,%got);
-    while ($r = $st->fetch) {
-	my $h = {};
-	tie %$h,'Tie::DBI::Record',$s,$r->[0];
-	$got{$r->[0]} = $h;
+    my ( $r, %got );
+    while ( $r = $st->fetch ) {
+        my $h = {};
+        tie %$h, 'Tie::DBI::Record', $s, $r->[0];
+        $got{ $r->[0] } = $h;
     }
     $st->finish;
-    @keys = split($;,$key);
-    return (@keys > 1) ? [@got{@keys}] : $got{$keys[0]};
+    @keys = split( $;, $key );
+    return ( @keys > 1 ) ? [ @got{@keys} ] : $got{ $keys[0] };
 }
 
 sub FIRSTKEY {
     my $s = shift;
-    my $st = $s->_prepare('fetchkeys',"SELECT $s->{key} FROM $s->{table}") 
-	|| croak "FIRSTKEY: ",$s->errstr;
-    $st->execute() ||
-	croak "FIRSTKEY: ",$s->errstr;
+    my $st = $s->_prepare( 'fetchkeys', "SELECT $s->{key} FROM $s->{table}" )
+      || croak "FIRSTKEY: ", $s->errstr;
+    $st->execute()
+      || croak "FIRSTKEY: ", $s->errstr;
     my $ref = $st->fetch;
-    unless (defined($ref)) {
-      $st->finish;
-      delete $s->{'fetchkeys'}; #freakin' sybase bug
-      return undef;
+    unless ( defined($ref) ) {
+        $st->finish;
+        delete $s->{'fetchkeys'};    #freakin' sybase bug
+        return undef;
     }
     return $ref->[0];
 }
 
 sub NEXTKEY {
     my $s = shift;
-    my $st = $s->_prepare('fetchkeys','');
+    my $st = $s->_prepare( 'fetchkeys', '' );
 
     # no statement handler defined, so nothing to iterate over
     return wantarray ? () : undef unless $st;
     my $r = $st->fetch;
-    if (!$r) {
-	$st->finish;
-	delete $s->{'fetchkeys'}; #freakin' sybase bug
-	return wantarray ? () : undef;
+    if ( !$r ) {
+        $st->finish;
+        delete $s->{'fetchkeys'};    #freakin' sybase bug
+        return wantarray ? () : undef;
     }
+
     # Should we do a tie here?
-    my ($key,$value) = ($r->[0],{});
-    return wantarray ? ($key,$value) : $key;
+    my ( $key, $value ) = ( $r->[0], {} );
+    return wantarray ? ( $key, $value ) : $key;
 }
 
 # Unlike fetch, this never goes to the cache
 sub EXISTS {
-    my ($s,$key) = @_;
-    $key = $s->_quote($s->{key},$key) unless $s->{CanBindSelect};
-    my $st = $s->_run_query('fetch1',"SELECT $s->{key} FROM $s->{table} WHERE $s->{key} = ?",$key);
+    my ( $s, $key ) = @_;
+    $key = $s->_quote( $s->{key}, $key ) unless $s->{CanBindSelect};
+    my $st = $s->_run_query( 'fetch1', "SELECT $s->{key} FROM $s->{table} WHERE $s->{key} = ?", $key );
     croak $DBI::errstr unless $st;
     $st->fetch;
     my $rows = $st->rows;
@@ -241,49 +250,50 @@ sub EXISTS {
 sub CLEAR {
     my $s = shift;
     croak "CLEAR: read-only database"
-	unless $s->{CLOBBER} > 2;
+      unless $s->{CLOBBER} > 2;
 
-    my $st = $s->_prepare('clear',"delete from $s->{table}");
-    $st->execute() ||
-	croak "CLEAR: delete statement failed, ",$s->errstr;
+    my $st = $s->_prepare( 'clear', "delete from $s->{table}" );
+    $st->execute()
+      || croak "CLEAR: delete statement failed, ", $s->errstr;
     $st->finish;
 }
 
 sub DELETE {
-    my ($s,$key) = @_;
+    my ( $s, $key ) = @_;
     croak "DELETE: read-only database"
-	unless $s->{CLOBBER} > 1;
-    $key = $s->_quote($s->{key},$key) unless $s->{CanBindSelect};    
-    my $st = $s->_run_query('delete',"delete from $s->{table} where $s->{key} = ?",$key) ||
-	croak "DELETE: delete statement failed, ",$s->errstr;
+      unless $s->{CLOBBER} > 1;
+    $key = $s->_quote( $s->{key}, $key ) unless $s->{CanBindSelect};
+    my $st = $s->_run_query( 'delete', "delete from $s->{table} where $s->{key} = ?", $key )
+      || croak "DELETE: delete statement failed, ", $s->errstr;
     $st->finish;
-    
+
 }
 
 sub STORE {
-    my ($s,$key,$value) = @_;
+    my ( $s, $key, $value ) = @_;
+
     # There are two cases where this can be called.  In the first case, we are
     # passed a hash reference to field names and their values.  In the second
     # case, we are passed a Tie::DBI::Record, for the purposes of a cloning
     # operation.
     croak "STORE: attempt to store non-hash value into record"
-	unless ref($value) eq 'HASH';
+      unless ref($value) eq 'HASH';
 
     croak "STORE: read-only database"
-	unless $s->{CLOBBER} > 0;
+      unless $s->{CLOBBER} > 0;
 
     my (@fields);
     my $ok = $s->_fields();
-    foreach (sort keys %$value) {
-	if ($_ eq $s->{key}) {
-	    carp qq/Ignored attempt to change value of key field "$s->{key}"/ if $s->{WARN};
-	    next;
-	}
-	if (!$ok->{$_}) {
-	    carp qq/Ignored attempt to set unknown field "$_"/ if $s->{WARN};
-	    next;
-	}
-	push(@fields,$_);
+    foreach ( sort keys %$value ) {
+        if ( $_ eq $s->{key} ) {
+            carp qq/Ignored attempt to change value of key field "$s->{key}"/ if $s->{WARN};
+            next;
+        }
+        if ( !$ok->{$_} ) {
+            carp qq/Ignored attempt to set unknown field "$_"/ if $s->{WARN};
+            next;
+        }
+        push( @fields, $_ );
     }
     return undef unless @fields;
     my (@values) = map { $value->{$_} } @fields;
@@ -291,29 +301,31 @@ sub STORE {
     # Attempt an insert.  If that fails (usually because the key already exists),
     # perform an update. For this to work correctly, the key field MUST be marked unique
     my $result;
-    if ($s->{BrokenInsert}) {  # check for broken drivers
-	$result = $s->EXISTS($key) ?
-	    $s->_update($key,\@fields,\@values)
-		:  $s->_insert($key,\@fields,\@values);
-    } else {
-      eval {
-      local($s->{'dbh'}->{PrintError}) = 0; # suppress warnings
-      $result = $s->_insert($key,\@fields,\@values);
-      };
-      $result or $result = $s->_update($key,\@fields,\@values);
+    if ( $s->{BrokenInsert} ) {    # check for broken drivers
+        $result =
+            $s->EXISTS($key)
+          ? $s->_update( $key, \@fields, \@values )
+          : $s->_insert( $key, \@fields, \@values );
     }
-    croak "STORE: ",$s->errstr if $s->error;
+    else {
+        eval {
+            local ( $s->{'dbh'}->{PrintError} ) = 0;    # suppress warnings
+            $result = $s->_insert( $key, \@fields, \@values );
+        };
+        $result or $result = $s->_update( $key, \@fields, \@values );
+    }
+    croak "STORE: ", $s->errstr if $s->error;
 
     # Neat special case: If we are passed an empty anonymous hash, then
     # we must tie it to Tie::DBI::Record so that the correct field updating
     # behavior springs into existence.
-    tie %$value,'Tie::DBI::Record',$s,$key
-        unless %$value;
+    tie %$value, 'Tie::DBI::Record', $s, $key
+      unless %$value;
 }
 
 sub fields {
     my $s = shift;
-    return keys %{$s->_fields()};
+    return keys %{ $s->_fields() };
 }
 
 sub dbh {
@@ -333,32 +345,33 @@ sub rollback {
 # You may want to override this to connect via a subclass of DBI, such
 # as Apache::DBI.
 sub connect {
-  my ($class,$dsn,$user,$password,$options) = @_;
-  return DBI->connect($dsn,$user,$password,$options);
+    my ( $class, $dsn, $user, $password, $options ) = @_;
+    return DBI->connect( $dsn, $user, $password, $options );
 }
- 
+
 # Return a low-level error.  You might want to override this
 # if you use a subclass of DBI
 sub errstr {
-  return $DBI::errstr;
+    return $DBI::errstr;
 }
 
 sub error {
-  return $DBI::err;
+    return $DBI::err;
 }
 
 sub select_where {
-    my($s,$query) = @_;
+    my ( $s, $query ) = @_;
+
     # get rid of everything but the where clause
-    $query=~s/^\s*(select .+)?where\s+//i; 
-    my $st = $s->{'dbh'}->prepare("select $s->{key} from $s->{table} where $query") 
-	|| croak "select_where: ",$s->errstr;
+    $query =~ s/^\s*(select .+)?where\s+//i;
+    my $st = $s->{'dbh'}->prepare("select $s->{key} from $s->{table} where $query")
+      || croak "select_where: ", $s->errstr;
     $st->execute()
-	|| croak "select_where: ",$s->errstr;
-    my ($key,@results);
-    $st->bind_columns(undef,\$key);
-    while ($st->fetch) {
-	push(@results,$key);
+      || croak "select_where: ", $s->errstr;
+    my ( $key, @results );
+    $st->bind_columns( undef, \$key );
+    while ( $st->fetch ) {
+        push( @results, $key );
     }
     $st->finish;
     return @results;
@@ -367,19 +380,19 @@ sub select_where {
 # ---------------- everything below this line is private --------------------------
 sub _run_query {
     my $self = shift;
-    my ($tag,$query,@bind_variables) = @_;
-    if ($self->{CanBind}) {
-	unless (!$self->{CanBindSelect} && $query=~/\bwhere\b/i) {
-	    my $sth = $self->_prepare($tag,$query);
-	    return unless $sth->execute(@bind_variables);
-	    return $sth;
-	}
+    my ( $tag, $query, @bind_variables ) = @_;
+    if ( $self->{CanBind} ) {
+        unless ( !$self->{CanBindSelect} && $query =~ /\bwhere\b/i ) {
+            my $sth = $self->_prepare( $tag, $query );
+            return unless $sth->execute(@bind_variables);
+            return $sth;
+        }
     }
-    local($^W) = 0;  # kill uninitialized variable warning
-    # if we get here, then we can't bind, so we replace ? with escaped parameters
-    while ( (my $pos = index($query, '?')) >= 0 ) {
-      my $value = shift(@bind_variables);
-      substr($query, $pos, 1) = (defined($value) ? ( $self->{CanBind} ? $self->{'dbh'}->quote($value) : $value ) : 'null');
+    local ($^W) = 0;    # kill uninitialized variable warning
+                        # if we get here, then we can't bind, so we replace ? with escaped parameters
+    while ( ( my $pos = index( $query, '?' ) ) >= 0 ) {
+        my $value = shift(@bind_variables);
+        substr( $query, $pos, 1 ) = ( defined($value) ? ( $self->{CanBind} ? $self->{'dbh'}->quote($value) : $value ) : 'null' );
     }
     my $sth = $self->{'dbh'}->prepare($query);
     return unless $sth && $sth->execute;
@@ -388,194 +401,195 @@ sub _run_query {
 
 sub _fields {
     my $self = shift;
-    unless ($self->{'fields'}) {
+    unless ( $self->{'fields'} ) {
 
-	my ($dbh,$table) = @{$self}{'dbh','table'};
+        my ( $dbh, $table ) = @{$self}{ 'dbh', 'table' };
 
-	local($^W) = 0;  # kill uninitialized variable warning
-	my $sth = $dbh->prepare("LISTFIELDS $table") unless($self->{CannotListfields});
+        local ($^W) = 0;    # kill uninitialized variable warning
+        my $sth = $dbh->prepare("LISTFIELDS $table") unless ( $self->{CannotListfields} );
 
-	# doesn't support LISTFIELDS, so try SELECT *
-	unless (!$self->{CannotListfields} && defined($sth) && $sth->execute) {  
-	  $sth = $dbh->prepare("SELECT * FROM $table WHERE 0=1") ||
-		croak "_fields() failed during prepare(SELECT) statement: ",$self->errstr;
-	  $sth->execute() ||
-	    croak "_fields() failed during execute(SELECT) statement: ",$self->errstr;
-	}
-	# if we get here, we can fetch the names of the fields
-	my %fields;
-	if ($self->{'CASESENSITIV'}) { 
-		%fields = map { $_=>1 } @{$sth->{NAME}};
-	}
-	else {
-		%fields = map { lc($_)=>1 } @{$sth->{NAME}}; 
-	}
-	
-	$sth->finish;
-	$self->{'fields'} = \%fields;
+        # doesn't support LISTFIELDS, so try SELECT *
+        unless ( !$self->{CannotListfields} && defined($sth) && $sth->execute ) {
+            $sth = $dbh->prepare("SELECT * FROM $table WHERE 0=1")
+              || croak "_fields() failed during prepare(SELECT) statement: ", $self->errstr;
+            $sth->execute()
+              || croak "_fields() failed during execute(SELECT) statement: ", $self->errstr;
+        }
+
+        # if we get here, we can fetch the names of the fields
+        my %fields;
+        if ( $self->{'CASESENSITIV'} ) {
+            %fields = map { $_ => 1 } @{ $sth->{NAME} };
+        }
+        else {
+            %fields = map { lc($_) => 1 } @{ $sth->{NAME} };
+        }
+
+        $sth->finish;
+        $self->{'fields'} = \%fields;
     }
     return $self->{'fields'};
 }
 
 sub _types {
-  my $self = shift;
-  return $self->{'types'} if $self->{'types'};
-  my ($sth,%types);
-  
-  if($self->{'driver'} eq 'Oracle') {
-    $sth = $self->{'dbh'}->prepare("SELECT column_name,data_type FROM ALL_TAB_COLUMNS WHERE TABLE_NAME = " . $self->{'dbh'}->quote("$self->{table}"));
-    $sth->execute()||
-      croak "_types() failed during execute(SELECT) statement: $DBI::errstr";
-    		
-    while (my ($col_name,$col_type)=$sth->fetchrow()) {
-      $types{$col_name} =  $col_type;
-    }
-  }
+    my $self = shift;
+    return $self->{'types'} if $self->{'types'};
+    my ( $sth, %types );
 
-  else {
-    $sth = $self->{'dbh'}->prepare("SELECT * FROM $self->{table} WHERE 0=1") ||
-      croak "_types() failed during prepare(SELECT) statement: $DBI::errstr";
-    $sth->execute() ||
-      croak "_types() failed during execute(SELECT) statement: $DBI::errstr";
-    my $types = $sth->{TYPE};
-    my $names = $sth->{NAME};
-    %types = map { shift(@$names) => $_ } @$types;
-  }
-  return $self->{'types'} = \%types;
+    if ( $self->{'driver'} eq 'Oracle' ) {
+        $sth = $self->{'dbh'}->prepare( "SELECT column_name,data_type FROM ALL_TAB_COLUMNS WHERE TABLE_NAME = " . $self->{'dbh'}->quote("$self->{table}") );
+        $sth->execute()
+          || croak "_types() failed during execute(SELECT) statement: $DBI::errstr";
+
+        while ( my ( $col_name, $col_type ) = $sth->fetchrow() ) {
+            $types{$col_name} = $col_type;
+        }
+    }
+
+    else {
+        $sth = $self->{'dbh'}->prepare("SELECT * FROM $self->{table} WHERE 0=1")
+          || croak "_types() failed during prepare(SELECT) statement: $DBI::errstr";
+        $sth->execute()
+          || croak "_types() failed during execute(SELECT) statement: $DBI::errstr";
+        my $types = $sth->{TYPE};
+        my $names = $sth->{NAME};
+        %types = map { shift(@$names) => $_ } @$types;
+    }
+    return $self->{'types'} = \%types;
 }
 
 sub _fetch_field ($$) {
-    my ($s,$key,$fields) = @_;
-    $key = $s->_quote($s->{key},$key) unless $s->{CanBindSelect};
+    my ( $s, $key, $fields ) = @_;
+    $key = $s->_quote( $s->{key}, $key ) unless $s->{CanBindSelect};
     my $valid = $s->_fields();
-    my @valid_fields = grep($valid->{$_},@$fields);
+    my @valid_fields = grep( $valid->{$_}, @$fields );
     return undef unless @valid_fields;
 
-    my $f = join(',',@valid_fields);
-    my $st = $s->_run_query("fetch$f","SELECT $f FROM $s->{table} WHERE $s->{key}=?",$key) ||
-	croak "_fetch_field: ",$s->errstr;
+    my $f = join( ',', @valid_fields );
+    my $st = $s->_run_query( "fetch$f", "SELECT $f FROM $s->{table} WHERE $s->{key}=?", $key )
+      || croak "_fetch_field: ", $s->errstr;
 
-    my (@r,@results);
-    while (@r = $st->fetchrow_array) {
-	my @i = map {$valid->{$_} ? shift @r : undef} @$fields;
-        if ($s->{ENCODING}) {
-            @i = map { _decode($s->{ENCODING}, $_) } @i;
+    my ( @r, @results );
+    while ( @r = $st->fetchrow_array ) {
+        my @i = map { $valid->{$_} ? shift @r : undef } @$fields;
+        if ( $s->{ENCODING} ) {
+            @i = map { _decode( $s->{ENCODING}, $_ ) } @i;
         }
-	push(@results,(@$fields == 1) ? $i[0] : [@i]);
+        push( @results, ( @$fields == 1 ) ? $i[0] : [@i] );
     }
 
     $st->finish;
-    return (@results > 1) ? \@results : $results[0];
+    return ( @results > 1 ) ? \@results : $results[0];
 }
 
 sub _insert {
-    my ($s,$key,$fields,$values) = @_;
-    push (@$fields,$s->{key});
-    push (@$values,$key);
-    my @values = $s->_quote_many($fields,$values);
+    my ( $s, $key, $fields, $values ) = @_;
+    push( @$fields, $s->{key} );
+    push( @$values, $key );
+    my @values = $s->_quote_many( $fields, $values );
     my (@Qs) = ('?') x @$values;
-    local($") = ',';
-    my $st = $s->_run_query("insert@$fields","insert into $s->{table} (@$fields) values (@Qs)",@values);
-    pop (@$fields);
-    pop (@$values);    
+    local ($") = ',';
+    my $st = $s->_run_query( "insert@$fields", "insert into $s->{table} (@$fields) values (@Qs)", @values );
+    pop(@$fields);
+    pop(@$values);
     return $st ? $st->rows : 0;
 }
 
 sub _update {
-    my ($s,$key,$fields,$values) = @_;
-    my (@set) = map {"$_=?"} @$fields;
-    my @values = $s->_quote_many($fields,$values);
-    $key = $s->_quote($s->{key},$key) unless $s->{CanBindSelect};
-    local($") = ',';
-    my $st = $s->_run_query("update@$fields",
-			  "update $s->{table} set @set where $s->{key}=?",@values,$key);
+    my ( $s, $key, $fields, $values ) = @_;
+    my (@set) = map { "$_=?" } @$fields;
+    my @values = $s->_quote_many( $fields, $values );
+    $key = $s->_quote( $s->{key}, $key ) unless $s->{CanBindSelect};
+    local ($") = ',';
+    my $st = $s->_run_query(
+        "update@$fields",
+        "update $s->{table} set @set where $s->{key}=?", @values, $key
+    );
     return unless $st;
     return $st->rows;
 }
 
 sub _quote_many {
-  my ($s,$fields,$values) = @_;
+    my ( $s, $fields, $values ) = @_;
 
-  if ($s->{CanBind}) {
-      if ($s->{ENCODING}) {
-         return map { _encode($s->{ENCODING}, $_) } @$values;
-      }
-      else {
-         return @$values;
-      }
-  }
+    if ( $s->{CanBind} ) {
+        if ( $s->{ENCODING} ) {
+            return map { _encode( $s->{ENCODING}, $_ ) } @$values;
+        }
+        else {
+            return @$values;
+        }
+    }
 
-  my $noquote = $s->{NoQuote};
-  unless ($noquote) {
-      if ($s->{ENCODING}) {
-         return map { $s->{'dbh'}->quote(_encode($s->{ENCODING}, $_)) } @$values 
-      }
-      else {
-         return map { $s->{'dbh'}->quote($_) } @$values 
-      }
-  }
-  my @values = @$values;
-  my $types = $s->_types;
-  for (my $i=0;$i<@values;$i++) {
-    next if $noquote->{$types->{$fields->[$i]}};
-    if ($s->{'driver'} eq 'Oracle' && $types->{$fields->[$i]} eq 'DATE') {
-      my $epoch_date=str2time($values[$i]);
-      my $temp = time2iso($epoch_date);
-      $temp = $s->{'dbh'}->quote($temp);
-      $values[$i]=$temp ;
+    my $noquote = $s->{NoQuote};
+    unless ($noquote) {
+        if ( $s->{ENCODING} ) {
+            return map { $s->{'dbh'}->quote( _encode( $s->{ENCODING}, $_ ) ) } @$values;
+        }
+        else {
+            return map { $s->{'dbh'}->quote($_) } @$values;
+        }
     }
-    else {
-      $values[$i] = $s->{'dbh'}->quote($values[$i]);
+    my @values = @$values;
+    my $types  = $s->_types;
+    for ( my $i = 0; $i < @values; $i++ ) {
+        next if $noquote->{ $types->{ $fields->[$i] } };
+        if ( $s->{'driver'} eq 'Oracle' && $types->{ $fields->[$i] } eq 'DATE' ) {
+            my $epoch_date = str2time( $values[$i] );
+            my $temp       = time2iso($epoch_date);
+            $temp = $s->{'dbh'}->quote($temp);
+            $values[$i] = $temp;
+        }
+        else {
+            $values[$i] = $s->{'dbh'}->quote( $values[$i] );
+        }
     }
-  }
-  return @values;
+    return @values;
 }
 
 sub _quote {
-  my ($s,$field,$value) = @_;
-  my $types = $s->_types;
-  if (my $noquote = $s->{NoQuote}) {
-    return $noquote->{$types->{$field}} ? $value : $s->{'dbh'}->quote($value);
-  }
-  
-  if ($s->{'driver'} eq 'Oracle' && $types->{$field} eq 'DATE') {
-    my $epoch_date=str2time($value);
-    my $temp = time2iso($epoch_date);
-    $temp = $s->{'dbh'}->quote($temp);
-    #my $temp = $s->{'dbh'}->quote($value);
-    $temp = "to_date($temp,'YYYY-MM-DD HH24:MI:SS')";
-    return $temp;
-  }
-  else {
-    $value = _encode($s->{ENCODING}, $value) if $s->{ENCODING};
-    $value = $s->{'dbh'}->quote($value);
-    return $value;
-  }
+    my ( $s, $field, $value ) = @_;
+    my $types = $s->_types;
+    if ( my $noquote = $s->{NoQuote} ) {
+        return $noquote->{ $types->{$field} } ? $value : $s->{'dbh'}->quote($value);
+    }
+
+    if ( $s->{'driver'} eq 'Oracle' && $types->{$field} eq 'DATE' ) {
+        my $epoch_date = str2time($value);
+        my $temp       = time2iso($epoch_date);
+        $temp = $s->{'dbh'}->quote($temp);
+
+        #my $temp = $s->{'dbh'}->quote($value);
+        $temp = "to_date($temp,'YYYY-MM-DD HH24:MI:SS')";
+        return $temp;
+    }
+    else {
+        $value = _encode( $s->{ENCODING}, $value ) if $s->{ENCODING};
+        $value = $s->{'dbh'}->quote($value);
+        return $value;
+    }
 }
 
 sub _prepare ($$$) {
-    my($self,$tag,$q) = @_;
-    unless (exists($self->{$tag})) {
-	return undef unless $q;
-	warn $q,"\n" if $self->{DEBUG};
-	my $sth = $self->{'dbh'}->prepare($q);
-	$self->{$tag} = $sth;
-    } else {
-	$self->{$tag}->finish if $q;  # in case we forget
+    my ( $self, $tag, $q ) = @_;
+    unless ( exists( $self->{$tag} ) ) {
+        return undef unless $q;
+        warn $q, "\n" if $self->{DEBUG};
+        my $sth = $self->{'dbh'}->prepare($q);
+        $self->{$tag} = $sth;
+    }
+    else {
+        $self->{$tag}->finish if $q;    # in case we forget
     }
     $self->{$tag};
 }
 
 sub _encode {
-  eval {
-    return Encode::encode($_[0], $_[1]);
-  }
+    eval { return Encode::encode( $_[0], $_[1] ); };
 }
 
 sub _decode {
-  eval {
-    return Encode::decode($_[0], $_[1]);
-  }
+    eval { return Encode::decode( $_[0], $_[1] ); };
 }
 
 package Tie::DBI::Record;
@@ -589,28 +603,28 @@ $VERSION = '0.50';
 # tie %h,Tie::DBI::Record,dbh,table,record
 sub TIEHASH {
     my $class = shift;
-    my ($table,$record) = @_;
-    return bless { 
-	'table'=>$table,   # table object
-	'record'=>$record, # the record we're keyed to
-	},$class;
+    my ( $table, $record ) = @_;
+    return bless {
+        'table'  => $table,     # table object
+        'record' => $record,    # the record we're keyed to
+    }, $class;
 }
 
 sub FETCH {
-    my ($s,$field) = @_;
+    my ( $s, $field ) = @_;
     return undef unless $s->{'table'};
-    my (@fields) = split($;,$field);
-    return $s->{'table'}->_fetch_field($s->{'record'},\@fields);
+    my (@fields) = split( $;, $field );
+    return $s->{'table'}->_fetch_field( $s->{'record'}, \@fields );
 }
 
 sub DELETE {
-    my ($s,$field) = @_;
-    $s->STORE($field,undef);
+    my ( $s, $field ) = @_;
+    $s->STORE( $field, undef );
 }
 
 sub STORE {
-    my ($s,$field,$value) = @_;
-    $s->{'table'}->STORE($s->{'record'},{$field=>$value});
+    my ( $s, $field, $value ) = @_;
+    $s->{'table'}->STORE( $s->{'record'}, { $field => $value } );
 }
 
 # Can't delete the record in this way, but we can
@@ -618,26 +632,26 @@ sub STORE {
 sub CLEAR {
     my ($s) = @_;
     croak "CLEAR: read-only database"
-	unless $s->{'table'}->{CLOBBER} > 1;
-    my %h = map { $_ => undef} keys %{$s->{'table'}->_fields()};
-    delete $h{$s->{'record'}};  # can't remove key field
-    $s->{'table'}->STORE($s->{'record'},\%h);
+      unless $s->{'table'}->{CLOBBER} > 1;
+    my %h = map { $_ => undef } keys %{ $s->{'table'}->_fields() };
+    delete $h{ $s->{'record'} };    # can't remove key field
+    $s->{'table'}->STORE( $s->{'record'}, \%h );
 }
 
 sub FIRSTKEY {
     my $s = shift;
-    my $a = scalar keys %{$s->{'table'}->_fields()};
-    each %{$s->{'table'}->_fields()};
+    my $a = scalar keys %{ $s->{'table'}->_fields() };
+    each %{ $s->{'table'}->_fields() };
 }
 
 sub NEXTKEY {
     my $s = shift;
-    each %{$s->{'table'}->_fields()};
+    each %{ $s->{'table'}->_fields() };
 }
 
 sub EXISTS {
     my $s = shift;
-    return $s->{'table'}->_fields()->{$_[0]};
+    return $s->{'table'}->_fields()->{ $_[0] };
 }
 
 sub DESTROY {
@@ -1150,6 +1164,5 @@ The latest version can be obtained from:
 perl(1), DBI(3), Tie::RDBM(3)
 
 =cut
-
 
 1;
