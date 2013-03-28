@@ -4,7 +4,7 @@ use strict;
 use vars qw($VERSION %Types);
 use Carp;
 use DBI;
-$VERSION = '0.72';
+$VERSION = '0.73';
 
 # %Types is used for creating the data table if it doesn't exist already.
 # You may want to edit this.

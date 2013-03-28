@@ -7,8 +7,9 @@ WriteMakefile(
     'VERSION_FROM'  => 'lib/Tie/DBI.pm', # finds $VERSION
     'ABSTRACT_FROM' => 'lib/Tie/DBI.pm',
     'PREREQ_PM'    => { 
-        Test::More => 0,
-        DBI        => 0,
+        'Test::More'     => 0,
+        'DBI'            => 0,
+	'DBD::SQLite'    => 0,
     }, 
     ($ExtUtils::MakeMaker::VERSION >= 6.3002 ? ('LICENSE'        => 'perl', ) : ()),
     'DISTNAME'  => 'Tie-DBI',

@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Tie-DBI
-version:            1.04
+version:            1.05
 abstract:           Tie hashes to DBI relational databases
 author:
     - Lincoln D. Stein <lds@cpan.org>
@@ -13,8 +13,9 @@ build_requires:
     ExtUtils::MakeMaker:  0
     Test::More:           0
 requires:
-    DBI:         0
-    Test::More:  0
+    DBD::SQLite:  0
+    DBI:          0
+    Test::More:   0
 resources:
     homepage:    http://wiki.github.com/toddr/Tie-DBI/
     license:     http://dev.perl.org/licenses/

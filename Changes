@@ -1,5 +1,8 @@
 Revision history for Perl extension Tie::DBI.
 
+1.05 Sat Apr10 01:00 2010
+       need to make DBD::SQLite to pre-req to get tests to succeed. This shouldn't really be an undue burden
+
 1.04 Mon Mar 31 22:25 2010
 	Add DBD::SQLite to build_requires meta so automated testing won't fail
 
