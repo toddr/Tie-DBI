@@ -46,6 +46,7 @@ my %CANNOT_LISTFIELDS = (
 			 'DBM' => 1,
 			 'PO' => 1,
 			 'AnyData' => 1,
+			 'mysqlPP' => 1,
 			);
 my %CAN_BINDSELECT = (
 		      'mysql' => 1,
