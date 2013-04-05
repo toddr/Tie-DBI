@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Tie-DBI
-version:            1.05
+version:            1.06
 abstract:           Tie hashes to DBI relational databases
 author:
     - Lincoln D. Stein <lds@cpan.org>

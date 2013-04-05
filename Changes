@@ -1,6 +1,9 @@
 Revision history for Perl extension Tie::DBI.
 
-1.05_01 Thy Mar 28 2013 Todd Rinaldo
+1.06 Fri Apr 5 2013 Todd Rinaldo
+     Bump to production release now tests all pass on cpan testers
+
+1.05_01 Thu Mar 28 2013 Todd Rinaldo
        Fix for RT 58813 - Fix for File based DBDs
        Fix for RT 84125 - Fix for mysqlPP
 
