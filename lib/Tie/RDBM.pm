@@ -1,6 +1,8 @@
 package Tie::RDBM;
 
 use strict;
+use warnings;
+use 5.006;
 use vars qw($VERSION %Types);
 use Carp;
 use DBI;
