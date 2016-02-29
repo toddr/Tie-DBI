@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/brummett/Tie-DBI.png?branch=master)](https://travis-ci.org/brummett/Tie-DBI)
+
 This distribution contains Tie::DBI and Tie::RDBM, two modules that
 allow you to tie associative arrays to relational databases using the
 DBI library.  The hash is tied to a table in a local or networked
