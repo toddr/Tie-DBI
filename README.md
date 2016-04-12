@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/brummett/Tie-DBI.png?branch=master)](https://travis-ci.org/brummett/Tie-DBI)
+[![Build Status](https://travis-ci.org/toddr/Tie-DBI.png?branch=master)](https://travis-ci.org/toddr/Tie-DBI)
 
 This distribution contains Tie::DBI and Tie::RDBM, two modules that
 allow you to tie associative arrays to relational databases using the
