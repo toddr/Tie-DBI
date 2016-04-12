@@ -1,6 +1,8 @@
 package Tie::DBI;
 
 use strict;
+use warnings;
+use 5.006;
 use vars qw($VERSION);
 use Carp;
 use DBI;
