@@ -26,7 +26,7 @@ unless ($DRIVER) {
 }
 
 if ($DRIVER) {
-    plan tests => 26;
+    plan tests => 27;
     diag("DBI.t - Using DBD driver $DRIVER...");
 }
 else {
@@ -183,3 +183,10 @@ my $before = TEST_STRING;
 $h{strawberries}->{description} = $before;
 my $after = $h{strawberries}->{description};
 is( $after, $before, "blanks aren't chopped" );
+
+# RT 104338 - prepare fails with a question mark in a text field
+use constant TEST_STRING_WITH_QUESTION_MARK => 'will this work? I hope so';
+$before = TEST_STRING_WITH_QUESTION_MARK;
+$h{strawberries}->{description} = $before;
+$after = $h{strawberries}->{description};
+is( $after, $before, 'question marks can appear in text fields');
