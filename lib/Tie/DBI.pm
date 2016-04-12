@@ -3,10 +3,9 @@ package Tie::DBI;
 use strict;
 use warnings;
 use 5.006;
-use vars qw($VERSION);
 use Carp;
 use DBI;
-$VERSION = '1.06';
+our $VERSION = '1.07';
 
 BEGIN {
     eval {
@@ -602,10 +601,9 @@ sub _decode {
 
 package Tie::DBI::Record;
 use strict;
-use vars qw($VERSION);
 use Carp;
 use DBI;
-$VERSION = '0.50';
+our $VERSION = '0.51';
 
 # TIEHASH interface
 # tie %h,Tie::DBI::Record,dbh,table,record
