@@ -395,9 +395,10 @@ sub _run_query {
     my $pos = 0;
     while ( ( $pos = index( $query, '?', $pos ) ) >= 0 ) {
         my $value = shift(@bind_variables);
-        $value = defined($value)
-                    ? ( $self->{CanBind} ? $self->{'dbh'}->quote($value) : $value )
-                    : 'null';
+        $value =
+          defined($value)
+          ? ( $self->{CanBind} ? $self->{'dbh'}->quote($value) : $value )
+          : 'null';
         substr( $query, $pos, 1 ) = $value;
         $pos += length($value);
     }
