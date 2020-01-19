@@ -29,11 +29,8 @@ WriteMakefile(
         resources => {
             license  => 'http://dev.perl.org/licenses/',
             homepage => 'http://wiki.github.com/toddr/Tie-DBI/',
-
-            #            bugtracker => 'http://code.google.com/p/Tie-DBI/issues/list',
+            bugtracker => 'http://github.com/toddr/Tie-DBI/issues',
             repository => 'http://github.com/toddr/Tie-DBI',
-
-            #            MailingList => 'http://groups.google.com/group/Tie-DBI',
         },
     },
   )
