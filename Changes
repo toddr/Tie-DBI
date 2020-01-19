@@ -1,5 +1,10 @@
 Revision history for Perl extension Tie::DBI.
 
+1.08 Sat Jan 18 2020 Todd Rinaldo
+    Switch testing to github actions
+	update MANIFEST and .gitignorew
+	Switch to github issues
+
 1.07 Tue Apr 12 2016 Todd Rinaldo
     Stop using vars in favor of ours
     Add Travis support
